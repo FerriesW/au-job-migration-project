@@ -1,0 +1,6 @@
+version: 2
+
+# Per-model docs and tests for the staging layer.
+# Models will be added in Day 3 (stg_adzuna__jobs, stg_occupation_lists, stg_eoi).
+
+models: []

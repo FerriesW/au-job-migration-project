@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv
+.uv-cache/
+
+# Environment / Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+service-account*.json
+gcp-credentials*.json
+profiles.yml
+
+# dbt
+target/
+dbt_packages/
+logs/
+.user.yml
+
+# Data outputs
+data/raw/
+data/processed/
+data/samples/
+*.csv
+*.jsonl
+*.parquet
+!data/samples/README.md
+!data/seeds/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Power BI
+*.pbix
+!screenshots/*.pbix.png
+
+# Build / output
+dist/
+build/

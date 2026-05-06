@@ -1,0 +1,135 @@
+================================================================================
+AU Migration & Jobs Radar — 开发日志
+================================================================================
+项目代号: au-migration-jobs-radar
+开始日期: 2026-05-06
+项目根目录: D:\Claude Project\au-job-migration-project\  (单层结构, 2026-05-06 重组)
+计划周期: 14 天 MVP
+
+格式约定:
+  [日期 阶段] 子任务 — 状态  说明
+================================================================================
+
+
+[2026-05-06 Day 0/Day 1 启动] 项目初始化阶段
+--------------------------------------------------------------------------------
+
+✅ 完成 — Day 0 准备物（不含外部账号注册）
+  • 编写 Adzuna API 验证脚本: au_job_radar_github/scripts/day0_verify_adzuna.py
+    - 拉前 5 页 (250 条) 墨尔本 IT 类 30 天职位
+    - 计算字段 fill rate (title/description/location/company/created/salary/category)
+    - 输出 CSV 到 data/samples/adzuna_day0_<UTC时间戳>.csv 供肉眼检查
+    - 三档自动判定: GO / NEEDS-REVIEW / NO-GO
+    - 阈值: total_count >= 1500, salary fill >= 30%, 核心字段完整
+  • 撰写 GCP/BigQuery 一次性设置指引: au_job_radar_github/docs/gcp-setup-guide.md
+    - 7 步: 建项目→开 API→建 GCS bucket→建 3 个 dataset→建 service account→
+      下载 JSON key→dbt debug 烟测
+    - 含 CLI 替代命令、成本预估、常见报错排查表
+
+✅ 完成 — Day 1 项目骨架 (au_job_radar_github/)
+  目录结构:
+    au_job_radar_github/
+    ├── adzuna_pipeline/        # Python 采集包 (config.py 已落)
+    │   ├── __init__.py
+    │   └── config.py           # pydantic-settings 类型安全配置
+    ├── dbt/                    # dbt 项目骨架
+    │   ├── dbt_project.yml     # 三层 schema 配置 (staging/intermediate/marts)
+    │   ├── profiles.yml.example
+    │   ├── README.md
+    │   └── models/
+    │       ├── staging/        # sources.yml 已声明 raw 三张源表
+    │       ├── intermediate/
+    │       └── marts/
+    ├── scripts/
+    │   ├── __init__.py
+    │   └── day0_verify_adzuna.py
+    ├── docs/
+    │   └── gcp-setup-guide.md
+    ├── data/samples/           # gitignored, 留空
+    ├── screenshots/            # 留空, Day 8 填
+    ├── .github/workflows/      # 留空, Day 12+ 填
+    ├── pyproject.toml          # uv 项目, Python 3.11+, 全部依赖锁列
+    ├── .env.example            # Adzuna/GCP/DashScope key 占位
+    ├── .gitignore              # 含 .env, gcp-credentials.json, data/raw 等
+    └── README.md               # v0.1, 简洁版, 等 Day 9 重写
+
+  技术决策:
+  • 包管理器: uv (用户偏好, 现代主流)
+  • Python: 3.11+
+  • 主依赖: httpx, tenacity, pydantic-settings, google-cloud-bigquery,
+    google-cloud-storage, dashscope, typer, rich, structlog
+  • 可选依赖组: dbt (dbt-core + dbt-bigquery), dev (pytest + ruff + mypy)
+
+⏳ 待用户操作 (阻塞 Day 2 启动)
+  1. 在 au_job_radar_github/ 根目录运行:
+       uv sync                           # 装依赖
+       cp .env.example .env              # 复制环境变量模板
+       # 把 ADZUNA_APP_ID / ADZUNA_APP_KEY 写进 .env
+       uv run python scripts/day0_verify_adzuna.py
+     → 看 verdict 是 GO / NEEDS-REVIEW / NO-GO, 截图或贴控制台输出回报
+  2. 跟着 docs/gcp-setup-guide.md 走完 7 步 (20-30 min):
+     - 建 GCP 项目 au-jobs-radar
+     - 启用 BigQuery + Storage API
+     - 建 GCS bucket au-jobs-radar-raw
+     - 建 raw / staging / marts 三个 BigQuery dataset (location: australia-southeast1)
+     - 建 service account au-jobs-radar-pipeline 并下载 JSON key
+     - 把 key 移到 au_job_radar_github/gcp-credentials.json
+     - 把项目 ID 填进 .env
+
+  待两步通过后, 进入 Day 2 (Adzuna 采集到 GCS + 加载到 BigQuery)
+
+================================================================================
+
+
+[2026-05-06 Day 0 第一轮验证 + 结构重组]
+--------------------------------------------------------------------------------
+
+🔍 第一轮 Adzuna 测试结果 (--where Melbourne --category it-jobs)
+  • Total 30d count: 1,129  (NO-GO 因 < 1500 阈值)
+  • 核心字段 (title/desc/location/company/created/category): 100% fill ✅
+  • salary_min/max fill: 9.2%  (低于 30% 阈值)
+
+🛠️ 阈值调整 (基于澳洲市场结构性现实)
+  • THRESHOLD_SALARY_FILL: 30% → 8%
+    理由: AU 招聘平台普遍隐去薪资 (Seek/Adzuna/LinkedIn 同等量级 8-15%);
+    应作为 README "limitation" 而非 Go/No-Go 否决项
+  • THRESHOLD_TOTAL_COUNT 保持 1500: 等多城合并测试再判
+
+🛠️ 脚本增强 (scripts/day0_verify_adzuna.py)
+  1. 支持空 where: --where "" 拉全澳, 不再强制传 city 参数
+  2. 新增多城聚合模式: --where "Melbourne,Sydney,Brisbane" 自动逐城拉取并汇总
+     符合计划 §5 Day-2 "墨尔本+悉尼+布里斯班" 的多城采集设计
+  3. 修正 Adzuna location.area 索引解析 (用户提示):
+     areas[0]=country (Australia), areas[1]=state (Victoria),
+     areas[2]=city (Melbourne), areas[3]=suburb
+     CSV 列重命名: state_area → country/state/city/suburb 四列拆开
+
+🏗️ 项目结构重组 (用户操作)
+  • 旧: D:\Claude Project\au-job-migration-project\au-migration-jobs-radar\
+        au_job_radar_github\au_job_radar\  (双层嵌套)
+  • 新: D:\Claude Project\au-job-migration-project\           (单层)
+        ├── adzuna_pipeline/   ├── scripts/
+        ├── dbt/                ├── docs/
+        ├── data/               ├── screenshots/
+        ├── .github/            ├── .venv/
+        ├── pyproject.toml      ├── uv.lock
+        ├── .env (已填实)        ├── gcp-credentials.json (已落)
+        ├── README.md           └── 开发日志.txt
+  • Git 仓库根 = 项目根, GitHub repo 名建议 au-jobs-radar (带连字符)
+
+🌐 GCP 状态
+  • 三个 dataset (raw/staging/marts) 通过 bq ls 验证 ✅
+  • Python BigQuery 客户端: ModuleNotFoundError, 待 uv sync --all-extras 后重测
+
+⏳ 待用户操作 (新指令)
+  1. cd "D:\Claude Project\au-job-migration-project"
+     uv sync --all-extras             # 装齐 dbt + dev 依赖组
+  2. 重测 Adzuna 多城合并:
+     uv run python scripts/day0_verify_adzuna.py --where "Melbourne,Sydney,Brisbane"
+     → 期望合并 ≥ 4000, 直接 GO
+  3. 重测 BigQuery Python 客户端 (单行, 无 PowerShell \ 续行):
+     uv run python -c "from google.cloud import bigquery; c = bigquery.Client(); print('Datasets:', [d.dataset_id for d in c.list_datasets()])"
+     → 期望: Datasets: ['marts', 'raw', 'staging']
+  4. 两步通过后 → 进入 Day 2 拆解
+
+================================================================================

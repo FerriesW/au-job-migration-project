@@ -1,0 +1,55 @@
+# dbt project for AU Migration & Jobs Radar
+# Docs: https://docs.getdbt.com/reference/dbt_project.yml
+
+name: 'au_jobs_radar'
+version: '0.1.0'
+config-version: 2
+
+profile: 'au_jobs_radar'   # must match an entry in profiles.yml
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# --- Materialisation defaults per layer -----------------------------------
+# staging   = views     (cheap, cleaning only)
+# intermediate = tables (cached, used by multiple marts)
+# marts     = tables    (BI-facing fact / dim)
+# --------------------------------------------------------------------------
+models:
+  au_jobs_radar:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: table
+      +schema: staging       # piggy-back on staging dataset for v1 simplicity
+    marts:
+      +materialized: table
+      +schema: marts
+
+seeds:
+  au_jobs_radar:
+    +schema: raw
+    occupation_lists:
+      +column_types:
+        anzsco_code: string
+        occupation_name: string
+        list_name: string
+
+vars:
+  # 30-day analysis window matching plan §2.2 Q1
+  analysis_window_days: 30
+
+  # Adzuna country filter — currently only AU
+  target_country: 'au'
