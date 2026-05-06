@@ -15,7 +15,7 @@ env/
 # uv
 .uv-cache/
 
-# Environment / Secrets — NEVER commit
+# Secrets
 .env
 .env.local
 .env.*.local
@@ -31,7 +31,7 @@ dbt_packages/
 logs/
 .user.yml
 
-# Data outputs
+# Data
 data/raw/
 data/processed/
 data/samples/
@@ -41,7 +41,7 @@ data/samples/
 !data/samples/README.md
 !data/seeds/*.csv
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 *.swp
@@ -50,8 +50,7 @@ Thumbs.db
 
 # Power BI
 *.pbix
-!screenshots/*.pbix.png
 
-# Build / output
+# Build artefacts
 dist/
 build/

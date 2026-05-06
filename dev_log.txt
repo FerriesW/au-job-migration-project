@@ -1,0 +1,99 @@
+==============================================================================
+AU Migration & Jobs Radar — Development Log
+==============================================================================
+Format: reverse chronological. Each entry records the calendar date, scope of
+work delivered, defects resolved, and a concise change manifest.
+Versioning follows Semantic Versioning (https://semver.org).
+==============================================================================
+
+
+[2026-05-06]  v0.1.0 — Project scaffolding and warehouse bootstrap
+------------------------------------------------------------------------------
+
+Scope of work
+  - Established the project root at D:\Claude Project\au-job-migration-project
+    as a single-layer repository (deprecating an earlier nested layout).
+  - Initialised the Python project under uv, targeting Python 3.11 or higher,
+    with separate dependency groups for runtime, dbt, and developer tooling.
+  - Authored adzuna_pipeline/config.py to expose typed Pydantic settings for
+    the Adzuna API, Google Cloud, DashScope, and runtime parameters.
+  - Implemented scripts/verify_adzuna_source.py to validate Adzuna data
+    availability against project thresholds, supporting single-city,
+    multi-city, and nationwide query modes.
+  - Implemented scripts/test_gcp.py as a four-stage smoke test covering
+    environment variables, credentials resolution, BigQuery dataset access,
+    and Cloud Storage object round-trip.
+  - Bootstrapped the dbt project under dbt/ with a three-layer model
+    structure (staging, intermediate, marts), source declarations for the
+    raw layer, and a profiles template driven by env_var() interpolation.
+  - Provisioned Google Cloud assets:
+      * Project: au-jobs-radar
+      * Datasets: raw, staging, marts (region: australia-southeast2)
+      * Storage bucket: au-jobs-radar-raw
+      * Service account: au-jobs-radar-pipeline with BigQuery Data Editor,
+        BigQuery Job User, and Storage Object Admin roles.
+  - Authored docs/gcp-setup-guide.md as the canonical onboarding procedure
+    for the cloud stack.
+
+Verifications passed
+  - Adzuna multi-city aggregation across Melbourne, Sydney, and Brisbane
+    (IT category, 30-day window) returned 4,728 postings, exceeding the
+    1,500 minimum threshold.
+  - GCP smoke test reported all four stages green, including BigQuery query
+    round-trip and Cloud Storage write/read/delete cycle.
+  - dbt debug succeeded against the BigQuery target with all configuration
+    and connection checks passing.
+
+Defects resolved
+  - Adzuna location parsing previously read areas[1] as the city; corrected
+    the index mapping to country=areas[0], state=areas[1], city=areas[2],
+    suburb=areas[3], and split the CSV export into discrete columns.
+  - Salary-fill threshold of 30 percent rejected viable Australian datasets;
+    lowered to 8 percent to reflect market disclosure norms and reclassified
+    salary completeness as a documented limitation rather than a gating
+    criterion.
+  - Initial GCS smoke test invoked bucket.exists(), which requires the
+    storage.buckets.get permission absent from Storage Object Admin;
+    rewrote the check as an object-level write/read/delete round-trip.
+  - dbt could not load credentials from .env because uv run does not export
+    dotenv variables to subprocesses by default; documented the use of
+    `uv run --env-file .env` for dbt invocations and switched profiles.yml
+    to env_var() interpolation.
+  - Resolved a ModuleNotFoundError on google.cloud.bigquery caused by an
+    incomplete `uv sync`; standardised on `uv sync --all-extras` to install
+    optional dependency groups (dbt, dev) alongside the runtime set.
+
+Refactor pass — code style alignment
+  - Removed phase markers (Day 0, Day 1, etc.) and tutorial-style commentary
+    from all source files; documentation files were left intact.
+  - Migrated all Python docstrings to the Google convention; added Final
+    type qualifiers to module-level constants.
+  - Extracted a private _BaseSettings class in adzuna_pipeline/config.py to
+    eliminate duplicated SettingsConfigDict definitions.
+  - Renamed scripts/day0_verify_adzuna.py to scripts/verify_adzuna_source.py
+    and updated the entry-point reference in pyproject.toml accordingly.
+  - Trimmed .env.example, .gitignore, dbt/dbt_project.yml, and
+    dbt/profiles.yml.example to remove instructional and decorative comments.
+
+Changes
+  Added
+    - adzuna_pipeline/{__init__.py, config.py}
+    - scripts/{__init__.py, verify_adzuna_source.py, test_gcp.py}
+    - dbt/{dbt_project.yml, profiles.yml.example, README.md, .gitignore}
+    - dbt/models/staging/{sources.yml, schema.yml}
+    - docs/gcp-setup-guide.md
+    - pyproject.toml, uv.lock
+    - .env.example, .gitignore
+    - README.md (v0.1)
+    - dev_log.txt (this file)
+  Changed
+    - Project layout flattened from nested au_job_radar_github/au_job_radar/
+      to a single repository root.
+    - dbt profile interpolation moved from hardcoded paths to env_var().
+    - Adzuna verification thresholds re-tuned for the AU market.
+  Fixed
+    - Adzuna areas[] index off-by-one for city extraction.
+    - GCS smoke test permission mismatch with Storage Object Admin role.
+    - Missing optional dependencies after partial `uv sync` invocation.
+
+==============================================================================

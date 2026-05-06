@@ -1,24 +1,13 @@
-# dbt profiles.yml — template
-# ---------------------------------------------------------------
-# Copy this to:
-#   • ~/.dbt/profiles.yml   (recommended, picked up automatically)
-# OR
-#   • ./profiles.yml         (and run dbt with --profiles-dir .)
-#
-# Fill in your actual GCP project ID and absolute path to the
-# service account JSON key. NEVER commit the filled-in version.
-# ---------------------------------------------------------------
-
 au_jobs_radar:
   target: dev
   outputs:
     dev:
       type: bigquery
       method: service-account
-      project: au-jobs-radar               # <-- replace with your GCP_PROJECT_ID
-      dataset: staging                     # default schema; per-layer overrides come from dbt_project.yml
-      keyfile: /absolute/path/to/gcp-credentials.json   # <-- replace
-      location: australia-southeast1
+      project:  "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset:  staging
+      keyfile:  "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
       threads: 4
       timeout_seconds: 300
       priority: interactive
@@ -28,10 +17,10 @@ au_jobs_radar:
     prod:
       type: bigquery
       method: service-account
-      project: au-jobs-radar
-      dataset: marts
-      keyfile: /absolute/path/to/gcp-credentials.json
-      location: australia-southeast1
+      project:  "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset:  marts
+      keyfile:  "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
       threads: 4
       timeout_seconds: 300
       priority: batch

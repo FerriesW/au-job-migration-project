@@ -1,3 +1,3 @@
-"""AU Migration & Jobs Radar — ingestion package."""
+"""Adzuna ingestion pipeline."""
 
 __version__ = "0.1.0"

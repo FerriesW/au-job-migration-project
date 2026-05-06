@@ -1,20 +1,13 @@
 version: 2
 
-# Source declarations for the raw layer.
-# Tables are populated by the Python ingestion scripts (Day 2+).
-# Wiring sources here in Day 1 lets us reference {{ source('raw', '...') }}
-# in staging models without hard-coded dataset names.
-
 sources:
   - name: raw
-    description: "Raw Adzuna + Home Affairs landings, untouched."
     database: "{{ env_var('GCP_PROJECT_ID', 'au-jobs-radar') }}"
     schema: raw
     tables:
       - name: adzuna_jobs
-        description: "Daily Adzuna API page payloads, one row per job ad."
-        # loaded_at_field & freshness configured once Day-2 ingestion lands
+        description: "Adzuna API job postings, one row per posting per snapshot."
       - name: occupation_lists
-        description: "MLTSSL / STSOL / CSOL occupation lists from Home Affairs (manual seed)."
+        description: "Department of Home Affairs MLTSSL / STSOL / CSOL occupation lists."
       - name: eoi_invitations
-        description: "Department of Home Affairs EOI invitation rounds (manual seed, last 6 months)."
+        description: "Department of Home Affairs EOI invitation rounds."
