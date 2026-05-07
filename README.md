@@ -74,6 +74,3 @@ LLM evaluation work at iFLYTEK Smart City. Open to data analyst / data
 engineer roles in Melbourne.
 
 ---
-
-*This is a 14-day MVP portfolio project. See `migration-job-dashboard-plan.md`
-in the parent directory for the full execution plan.*
