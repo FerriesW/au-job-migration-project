@@ -33,11 +33,20 @@ models:
 seeds:
   au_jobs_radar:
     +schema: raw
+    +quote_columns: false
     occupation_lists:
       +column_types:
         anzsco_code: string
         occupation_name: string
         list_name: string
+        effective_date: date
+    eoi_invitations:
+      +column_types:
+        round_date: date
+        visa_subclass: string
+        anzsco_code: string
+        points_cutoff: int64
+        invitations_issued: int64
 
 vars:
   analysis_window_days: 30

@@ -42,6 +42,7 @@ dev = [
 
 [project.scripts]
 verify-adzuna = "scripts.verify_adzuna_source:app"
+ingest-adzuna = "scripts.ingest_adzuna:app"
 
 [build-system]
 requires = ["hatchling"]

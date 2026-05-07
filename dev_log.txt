@@ -7,6 +7,106 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-05-07]  v0.2.0 — Adzuna ingestion pipeline and raw-layer seeds
+------------------------------------------------------------------------------
+
+Scope of work
+  - Implemented the adzuna_pipeline ingestion package as three cooperating
+    modules:
+      * client.py   — httpx-based search-API client with tenacity-driven
+                      exponential backoff, request-level rate limiting,
+                      typed SearchQuery / SearchPage data classes, and a
+                      pagination iterator.
+      * storage.py  — Cloud Storage uploader that serialises records as
+                      gzipped newline-delimited JSON under the canonical
+                      key gs://{bucket}/adzuna/snapshot_date=YYYY-MM-DD/
+                      {city}.jsonl.gz, injecting snapshot_date,
+                      ingested_at, and source_city as observability
+                      metadata on every record.
+      * loader.py   — BigQuery loader exposing an explicit SchemaField
+                      list for raw.adzuna_jobs (including nested location,
+                      company, and category records), DAY partitioning on
+                      snapshot_date, clustering on source_city, and
+                      idempotent partition replacement.
+  - Added scripts/ingest_adzuna.py as the end-to-end orchestrator with
+    Typer-based CLI flags for cities, snapshot date, dry-run, partition
+    replacement, and logging level. Emits a per-city summary table and a
+    non-zero exit code when any city fails.
+  - Provisioned dbt seeds for the raw layer:
+      * dbt/seeds/occupation_lists.csv (10-row MLTSSL/STSOL sample)
+      * dbt/seeds/eoi_invitations.csv (8-row 189/491 round sample)
+      * dbt/seeds/README.md documenting upstream sources for production
+        replacement.
+  - Registered seed column types in dbt_project.yml under seeds.
+  - Authored dbt/macros/generate_schema_name.sql to override dbt's
+    default schema-naming convention so the model-level schema declaration
+    is used verbatim.
+  - Updated pyproject.toml with an ingest-adzuna console-script entry
+    point and amended .gitignore to retain dbt/seeds/*.csv in version
+    control.
+  - Refactored adzuna_pipeline/__init__.py to re-export the public API
+    surface (clients, schemas, data classes).
+
+Verifications passed
+  - Dry run with --max-pages 2 fetched 300 records across the three
+    cities, uploaded three gzipped JSONL objects to GCS, and skipped the
+    BigQuery load step as expected.
+  - Production run with --replace-partition loaded 4,704 records into
+    raw.adzuna_jobs (Sydney 2,806; Melbourne 1,102; Brisbane 796).
+  - bq ls au-jobs-radar:raw confirmed three tables present, with
+    adzuna_jobs reporting DAY partitioning on snapshot_date and clustering
+    on source_city.
+  - dbt seed loaded 10 rows into raw.occupation_lists and 8 rows into
+    raw.eoi_invitations after the schema-name macro override.
+  - Aggregate diagnostic query returned 4,704 jobs across 3 source cities
+    with salary disclosure rates between 10.4 and 15.5 percent and average
+    minimum salaries between A$121K and A$140K.
+
+Known limitations
+  - Adzuna search-API job descriptions are truncated at approximately 500
+    characters; the per-city averages are 499.67, 500.00, and 499.90
+    characters. Full descriptions require per-job calls to /jobs/{id}.
+    Decision on whether to enrich a sample subset is deferred to the LLM
+    extraction phase.
+
+Defects resolved
+  - Initial dry-run hit cascading HTTP 503 responses from Adzuna for
+    Melbourne, exhausting the four-attempt retry budget. Raised
+    RETRY_ATTEMPTS to 6 and RETRY_WAIT_MAX_SECONDS to 30, providing a
+    cumulative wait budget of approximately 31 seconds per page.
+  - httpx logged each request URL at INFO level, exposing the Adzuna
+    app_id and app_key in console output. Suppressed httpx, httpcore,
+    google.auth, and urllib3 loggers to WARNING in the orchestrator.
+  - dbt seed initially materialised tables under a staging_raw dataset
+    because the default generate_schema_name macro concatenates
+    target.schema with the model-level +schema configuration. Overrode
+    the macro so model-level schema declarations are honoured verbatim;
+    dropped the misplaced staging_raw dataset and re-ran dbt seed with
+    --full-refresh.
+
+Changes
+  Added
+    - adzuna_pipeline/client.py
+    - adzuna_pipeline/storage.py
+    - adzuna_pipeline/loader.py
+    - scripts/ingest_adzuna.py
+    - dbt/macros/generate_schema_name.sql
+    - dbt/seeds/occupation_lists.csv
+    - dbt/seeds/eoi_invitations.csv
+    - dbt/seeds/README.md
+  Changed
+    - adzuna_pipeline/__init__.py: re-export public API surface.
+    - dbt/dbt_project.yml: registered column types for both seed tables.
+    - pyproject.toml: added ingest-adzuna console-script entry point.
+    - .gitignore: whitelisted dbt/seeds/*.csv and dbt/seeds/README.md.
+  Fixed
+    - Adzuna client retry budget insufficient for transient 503 windows.
+    - Credential leakage in httpx request logs.
+    - Misplaced seed dataset caused by dbt default schema-name macro.
+
+==============================================================================
+
+
 [2026-05-06]  v0.1.0 — Project scaffolding and warehouse bootstrap
 ------------------------------------------------------------------------------
 

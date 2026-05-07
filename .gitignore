@@ -39,7 +39,8 @@ data/samples/
 *.jsonl
 *.parquet
 !data/samples/README.md
-!data/seeds/*.csv
+!dbt/seeds/*.csv
+!dbt/seeds/README.md
 
 # IDE / OS
 .vscode/
