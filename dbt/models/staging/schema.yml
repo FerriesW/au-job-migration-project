@@ -1,3 +1,106 @@
 version: 2
 
-models: []
+models:
+  - name: stg_adzuna__jobs
+    description: >
+      Cleaned Adzuna job postings with nested fields flattened, HTML tags
+      stripped from descriptions, and a derived salary_avg column. One row
+      per (job_id, snapshot_date) after deduplicating cross-city overlap.
+    columns:
+      - name: job_id
+        description: "Adzuna job identifier."
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Logical partition date of the ingestion run."
+        tests:
+          - not_null
+      - name: state
+        description: "Australian state extracted from location.area[1]."
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - Victoria
+                  - New South Wales
+                  - Queensland
+                  - Australian Capital Territory
+                  - Tasmania
+                  - South Australia
+                  - Western Australia
+                  - Northern Territory
+              config:
+                severity: warn
+      - name: source_city
+        description: "City filter that produced this row from the Adzuna API."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Melbourne', 'Sydney', 'Brisbane']
+      - name: posted_at
+        description: "Job creation timestamp from the Adzuna API."
+      - name: salary_min
+        description: "Lower bound of advertised salary in AUD."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0 or salary_min is null"
+      - name: salary_avg
+        description: "Average of salary_min and salary_max when both are present."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - job_id
+              - snapshot_date
+
+  - name: stg_occupation_lists
+    description: >
+      Australian skilled-migration occupation reference table with normalised
+      list_name casing and boolean membership flags for each list.
+    columns:
+      - name: anzsco_code
+        description: "ANZSCO 6-digit occupation code."
+        tests:
+          - unique
+          - not_null
+      - name: occupation_name
+        description: "Human-readable ANZSCO occupation title."
+        tests:
+          - not_null
+      - name: list_name
+        description: "Migration list name (MLTSSL / STSOL / CSOL)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['MLTSSL', 'STSOL', 'CSOL']
+
+  - name: stg_eoi
+    description: >
+      Department of Home Affairs SkillSelect EOI invitation rounds with
+      derived round_year and round_month columns.
+    columns:
+      - name: round_date
+        description: "Invitation round date."
+        tests:
+          - not_null
+      - name: visa_subclass
+        description: "Visa subclass identifier (189, 190, 491, ...)."
+        tests:
+          - not_null
+      - name: invitations_issued
+        description: "Number of invitations issued in the round."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - round_date
+              - visa_subclass
+              - anzsco_code

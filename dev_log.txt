@@ -7,6 +7,88 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-05-08]  v0.3.0 — Staging layer with cleansed views and 17 data tests
+------------------------------------------------------------------------------
+
+Scope of work
+  - Introduced dbt-utils 1.x as a project dependency via dbt/packages.yml
+    to support unique_combination_of_columns and expression_is_true tests.
+  - Authored three staging models materialised as views:
+      * stg_adzuna__jobs.sql  — flattens nested location/company/category
+        records, casts ISO timestamps, strips HTML tags from descriptions,
+        derives a salary_avg column, and deduplicates the row set on
+        (id, snapshot_date) using QUALIFY ROW_NUMBER() to remove cross-
+        city query overlap.
+      * stg_occupation_lists.sql — normalises list_name casing and adds
+        boolean membership flags (is_mltssl / is_stsol / is_csol).
+      * stg_eoi.sql — derives round_year and round_month columns and
+        normalises visa_subclass casing.
+  - Documented the three models and their key columns in
+    dbt/models/staging/schema.yml and added 17 data tests covering
+    grain uniqueness, NOT NULL invariants, accepted-value enumerations,
+    and non-negative numeric ranges.
+  - The state accepted_values test runs at WARN severity to surface
+    legitimate-but-unenumerated states (ACT, NT, etc.) without blocking
+    builds.
+
+Verifications passed
+  - dbt deps installed dbt-utils without conflicts.
+  - dbt run --select staging materialised three views in 4 seconds.
+  - dbt test --select staging executed 17 tests with PASS=17 / WARN=0 /
+    ERROR=0 in 11.7 seconds, including the cross-city deduplication
+    invariant on (job_id, snapshot_date).
+  - Sampling stg_adzuna__jobs returned cleansed records with normalised
+    state (Queensland, New South Wales) and city (Brisbane Region,
+    Sydney Region) columns and a populated salary_avg.
+  - stg_occupation_lists exposed all 10 reference rows with correct
+    boolean flags. stg_eoi exposed all 8 rounds in reverse chronological
+    order.
+
+Known limitations discovered during validation
+  - Adzuna salary_min / salary_max are produced by Adzuna's predictive
+    model rather than parsed from the job description. Observed
+    discrepancies of more than fifty percent between salary_avg and the
+    salary range stated explicitly in the job title. Filter by
+    salary_is_predicted = 'verified' before using these fields for
+    statistical analysis, or extract salary from description via the
+    LLM extraction stage.
+  - Adzuna location.area[2] returns region-level identifiers
+    ('Melbourne Region', 'Brisbane Region') rather than city-proper
+    names. This is sufficient for state-level and metropolitan-area
+    analysis. Use location.area[3] for suburb-level granularity.
+
+Defects resolved
+  - The original (job_id, snapshot_date) uniqueness test failed with
+    711 duplicate rows. Investigation showed that the same Adzuna job
+    posting commonly surfaces in more than one per-city ingestion run,
+    typically for remote or national roles. Resolved in
+    stg_adzuna__jobs.sql by deduplicating on (id, snapshot_date) using
+    QUALIFY ROW_NUMBER() OVER (... ORDER BY source_city) = 1, retaining
+    the alphabetically-first source_city for determinism. The
+    authoritative geographic attribution is taken from location.area
+    rather than source_city.
+  - dbt 1.11 emitted seven MissingArgumentsPropertyInGenericTestDeprecation
+    warnings because generic-test parameters were declared at the test's
+    top level. Migrated all generic-test argument blocks (accepted_values,
+    expression_is_true, unique_combination_of_columns) to the new nested
+    `arguments:` form for compatibility with the dbt 2.0 contract.
+
+Changes
+  Added
+    - dbt/packages.yml
+    - dbt/models/staging/stg_adzuna__jobs.sql
+    - dbt/models/staging/stg_occupation_lists.sql
+    - dbt/models/staging/stg_eoi.sql
+  Changed
+    - dbt/models/staging/schema.yml: full rewrite with three documented
+      models and 17 data tests using the dbt 1.11 nested-arguments form.
+  Fixed
+    - Cross-city duplicate rows in stg_adzuna__jobs.
+    - dbt 1.11 generic-test argument deprecation across seven sites.
+
+==============================================================================
+
+
 [2026-05-07]  v0.2.0 — Adzuna ingestion pipeline and raw-layer seeds
 ------------------------------------------------------------------------------
 
