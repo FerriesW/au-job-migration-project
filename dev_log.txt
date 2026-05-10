@@ -7,6 +7,144 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-05-10]  v0.4.0 — LLM extraction pipeline and intermediate enrichment layer
+------------------------------------------------------------------------------
+
+Scope of work
+  - Authored the adzuna_pipeline.extraction sub-package as five cooperating
+    modules:
+      * schema.py    — Pydantic model defining the extraction contract
+                       (required_skills, years_experience, sponsorship_signal,
+                       local_experience_required, remote_friendly) with
+                       enum-aliasing pre-validators that normalise common
+                       LLM paraphrases (e.g. "fully remote" -> "remote").
+      * prompts.py   — System prompt and chat-formatted few-shot examples
+                       (positive case, sponsorship case, header-only case).
+      * client.py    — Async Qwen client over the DashScope OpenAI-compatible
+                       endpoint with tenacity retries and a base-URL validator.
+      * batch.py     — BigQuery-driven batch processor with bounded asyncio
+                       concurrency and idempotent MERGE upserts keyed on
+                       (job_id, snapshot_date) into staging.adzuna_jobs_llm_extract.
+      * judge.py     — LLM-as-judge framework using Qwen-Plus to score each
+                       field of the extractor's output as correct, incorrect,
+                       or uncertain with one-line reasoning.
+  - Added scripts/extract_llm_signals.py (Typer CLI) and
+    scripts/evaluate_extraction.py (Typer CLI) as user-facing entry points,
+    registered as ingest-llm-signals and evaluate-extraction console scripts
+    in pyproject.toml.
+  - Provisioned dbt intermediate layer:
+      * models/intermediate/sources.yml exposing the LLM extract table to dbt.
+      * models/intermediate/int_jobs_enriched.sql materialising a partitioned,
+        clustered table that LEFT JOINs cleansed staging jobs with extraction
+        outputs and adds two derived columns (has_extraction, skills_count).
+      * models/intermediate/schema.yml documenting nine columns with seven
+        column-level tests and one model-level uniqueness test.
+      * tests/extraction_coverage_at_least_90pct.sql singular test
+        enforcing the operational guarantee that at least 90 percent of
+        rows carry an extraction.
+  - Updated .env.example with the optional DASHSCOPE_BASE_URL override and
+    JUDGE_MODEL alias for the evaluator.
+
+Verifications passed
+  - Single-row smoke run reached the DashScope endpoint and persisted to
+    BigQuery after the credential plumbing was repaired.
+  - 100-row sample run (concurrency 5) completed in approximately one
+    minute and seeded the evaluation set.
+  - LLM-as-judge evaluation produced an iterative quality-improvement
+    sequence: 90.8 percent overall accuracy at baseline, 88.2 percent
+    after a constraint-tightening revision that surfaced a few-shot
+    anchor regression on duplicate template postings, then 95.9 percent
+    after introducing a third "header-only / defaults" few-shot example.
+    Per-field accuracy of the final prompt was required_skills 94.1,
+    years_experience 100.0, sponsorship_signal 100.0,
+    local_experience_required 100.0, remote_friendly 85.3.
+  - Track-C full run extracted 3,925 of 3,925 pending rows
+    (3,922 ok, 3 enum-validation failures) at the first pass; after
+    adding pre-validators the three failures resolved on a one-row
+    re-run, leaving 3,975 ok rows total in
+    staging.adzuna_jobs_llm_extract.
+  - dbt build over the intermediate layer materialised int_jobs_enriched
+    and ran 11 tests with PASS=11 / WARN=0 / ERROR=0, including the
+    custom coverage test which reported 100.0 percent enrichment.
+  - Diagnostic SQL on int_jobs_enriched confirmed 3,975 total rows, 100
+    percent extraction coverage, two explicit_yes sponsorship signals,
+    seventy-six fully-remote roles, and an average of 0.42 extracted
+    skills per job.
+
+Known limitations recorded during validation
+  - Adzuna search-API descriptions are truncated at approximately 500
+    characters; the average extracted-skill count of 0.42 per job
+    quantifies the impact (roughly 90 percent of JDs do not reach a
+    skills section within the truncation window). Skill-level analysis
+    in the marts layer should be qualified with this constraint.
+  - Adzuna salary fields remain model-predicted rather than parsed from
+    JD text; downstream salary analytics should filter by
+    salary_is_predicted = 'verified' or rely on LLM-extracted salary
+    once a future iteration enriches against the per-job /jobs/{id}
+    endpoint.
+  - The LLM judge is not infallible. Observed one false-positive case
+    where the judge flagged "certification sponsorship" as a visa
+    sponsorship signal; the extractor correctly returned unspecified.
+    Future evaluation iterations could include explicit
+    judge-calibration probes.
+  - For the staffing-agency template JDs that re-post identical text
+    across cities, residual skill hallucinations occasionally extract
+    role descriptors ("Data Center", "infrastructure") rather than
+    technologies. Documented as a data-quality limitation tied to the
+    truncated-description issue above.
+
+Defects resolved
+  - DashScope authentication failed first against qwen-plus-2025-12-01,
+    which requires paid activation in the user's tenant. Switched the
+    default to qwen-turbo and exposed QWEN_MODEL plus DASHSCOPE_BASE_URL
+    overrides in .env.example to support the international (Singapore)
+    free-tier endpoint used by the user.
+  - The DASHSCOPE_BASE_URL value initially included the variable name
+    in its value field due to manual edit duplication, which produced
+    httpx.UnsupportedProtocol errors that were opaque from the original
+    raise_for_status path. Added an explicit base-URL validator that
+    surfaces a descriptive ExtractionError before any HTTP request is
+    issued.
+  - Three full-run extractions failed Pydantic validation because the
+    model emitted "fully remote" / "full remote" instead of the
+    canonical enum value "remote". Added mode='before' field validators
+    on remote_friendly and sponsorship_signal that map common synonyms
+    to canonical enum values so downstream parsing succeeds without
+    weakening the schema contract.
+  - The first prompt-iteration round produced a regression in
+    required_skills accuracy (76.0 -> 70.6 percent) because vague
+    template descriptions caused the model to copy skill lists from the
+    second few-shot example. Resolved by adding a third "header-only
+    description -> default outputs" few-shot example, raising
+    required_skills accuracy to 94.1 percent.
+
+Changes
+  Added
+    - adzuna_pipeline/extraction/__init__.py
+    - adzuna_pipeline/extraction/schema.py
+    - adzuna_pipeline/extraction/prompts.py
+    - adzuna_pipeline/extraction/client.py
+    - adzuna_pipeline/extraction/batch.py
+    - adzuna_pipeline/extraction/judge.py
+    - scripts/extract_llm_signals.py
+    - scripts/evaluate_extraction.py
+    - dbt/models/intermediate/sources.yml
+    - dbt/models/intermediate/int_jobs_enriched.sql
+    - dbt/models/intermediate/schema.yml
+    - dbt/tests/extraction_coverage_at_least_90pct.sql
+  Changed
+    - .env.example: documented DASHSCOPE_BASE_URL and JUDGE_MODEL.
+    - pyproject.toml: registered extract-llm-signals and
+      evaluate-extraction console scripts.
+  Fixed
+    - Opaque httpx.UnsupportedProtocol on malformed DASHSCOPE_BASE_URL.
+    - Pydantic enum failures on synonymous remote / sponsorship values.
+    - Few-shot anchor effect that produced skill hallucinations on
+      template job postings.
+
+==============================================================================
+
+
 [2026-05-08]  v0.3.0 — Staging layer with cleansed views and 17 data tests
 ------------------------------------------------------------------------------
 

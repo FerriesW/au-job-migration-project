@@ -43,6 +43,8 @@ dev = [
 [project.scripts]
 verify-adzuna = "scripts.verify_adzuna_source:app"
 ingest-adzuna = "scripts.ingest_adzuna:app"
+extract-llm-signals = "scripts.extract_llm_signals:app"
+evaluate-extraction = "scripts.evaluate_extraction:app"
 
 [build-system]
 requires = ["hatchling"]

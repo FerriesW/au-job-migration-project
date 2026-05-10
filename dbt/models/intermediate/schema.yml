@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: int_jobs_enriched
+    description: >
+      Enriched per-job fact joining cleansed Adzuna postings with the
+      Qwen-Turbo extraction outputs (skills, seniority, sponsorship, location,
+      and remote-friendliness). One row per (job_id, snapshot_date).
+      Materialised as a partitioned table for downstream marts.
+    columns:
+      - name: job_id
+        description: "Adzuna job identifier."
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Logical partition date of the upstream ingestion."
+        tests:
+          - not_null
+      - name: source_city
+        description: "City filter that produced this row from the Adzuna API."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Melbourne', 'Sydney', 'Brisbane']
+      - name: state
+        description: "Australian state extracted from location.area[1]."
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - Victoria
+                  - New South Wales
+                  - Queensland
+                  - Australian Capital Territory
+                  - Tasmania
+                  - South Australia
+                  - Western Australia
+                  - Northern Territory
+              config:
+                severity: warn
+      - name: sponsorship_signal
+        description: "Visa-sponsorship intent extracted from JD text."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['explicit_yes', 'explicit_no', 'unspecified']
+      - name: remote_friendly
+        description: "Work-mode disposition extracted from JD text."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['remote', 'hybrid', 'onsite', 'unspecified']
+      - name: years_experience
+        description: "Minimum years of experience required, when stated."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0 and 40 or years_experience is null"
+      - name: required_skills
+        description: "Technical skills extracted from JD by the LLM."
+      - name: local_experience_required
+        description: "True only when JD explicitly requires AU work experience."
+      - name: has_extraction
+        description: "Boolean flag indicating whether the LLM extraction joined."
+      - name: extraction_model_version
+        description: "Model identifier and run-date stamp (e.g. qwen-turbo@2026-05-09)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - job_id
+              - snapshot_date

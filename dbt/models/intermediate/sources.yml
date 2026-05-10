@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: staging
+    database: "{{ env_var('GCP_PROJECT_ID', 'au-jobs-radar') }}"
+    schema: staging
+    description: "Tables landed by the LLM extraction pipeline outside of dbt."
+    tables:
+      - name: adzuna_jobs_llm_extract
+        description: "Per-job structured signals produced by Qwen extraction."
