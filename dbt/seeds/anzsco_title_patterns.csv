@@ -1,0 +1,15 @@
+priority,anzsco_code,occupation_name,title_pattern
+1,261111,ICT Business Analyst,business analyst|bi analyst|business intelligence analyst|product analyst
+1,261112,Systems Analyst,systems analyst|business systems analyst
+1,261311,Analyst Programmer,analyst programmer
+1,261312,Developer Programmer,application developer|software developer|web developer|frontend developer|front.end developer|backend developer|back.end developer|mobile developer|ios developer|android developer
+1,261313,Software Engineer,software engineer|backend engineer|back.end engineer|frontend engineer|front.end engineer|fullstack engineer|full.stack engineer|platform engineer|integration engineer
+1,261314,Software Tester,software tester|qa engineer|test engineer|test analyst|qa analyst|quality assurance engineer|automation tester
+1,262112,ICT Security Specialist,security analyst|security engineer|cyber.?security|infosec|cloud security|application security|penetration tester
+1,263111,Computer Network and Systems Engineer,network engineer|infrastructure engineer|cloud engineer|devops engineer|site reliability|sre engineer
+1,263213,ICT Quality Assurance Engineer,quality assurance lead|qa lead|test lead
+1,224711,Management Consultant,management consultant|strategy consultant
+2,261313,Software Engineer (data engineering),data engineer|machine learning engineer|ml engineer|ai engineer
+2,261111,ICT Business Analyst (data analyst),data analyst|reporting analyst|insights analyst|analytics consultant
+2,261313,Software Engineer (data scientist),data scientist|machine learning specialist
+2,263111,Computer Network and Systems Engineer (cloud platform),aws engineer|gcp engineer|azure engineer|kubernetes engineer

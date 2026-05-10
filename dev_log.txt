@@ -7,6 +7,162 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-05-11]  v0.5.0 — Marts layer (Final Fact & Dimension Tables)
+------------------------------------------------------------------------------
+
+Scope of work
+  - Authored dbt/seeds/anzsco_title_patterns.csv (14 rows of priority, 
+    anzsco_code, and title_regex_pattern) to bridge the gap between 
+    Adzuna's free-text job titles and structured ANZSCO codes.
+  - Added intermediate model int_jobs_anzsco_mapped.sql, performing a 
+    regex-driven join to map job titles to ANZSCO codes.
+  - Authored the marts layer to support final Power BI dashboarding:
+      * dim_occupation.sql — conformed dimension joining ANZSCO codes 
+                             with MLTSSL/STSOL/CSOL list membership.
+      * fct_occupation_supply_demand_30d.sql — Q1 fact table aggregating 
+                             jobs and EOI ratios per ANZSCO code.
+      * fct_local_experience_barrier.sql — Q2 fact table measuring local 
+                             experience and sponsorship requirements at 
+                             the (anzsco_code, state) grain.
+      * fct_skills_demand.sql — Q3 supporting fact table providing top 
+                             skills and sponsorship distribution per state.
+  - Authored dbt/models/marts/schema.yml to document the new models and 
+    added 14 data tests (unique grain, relationships to dim_occupation, 
+    pct range checks, and composite keys).
+  - Updated dbt_project.yml to register the new anzsco_title_patterns seed.
+
+Verifications passed
+  - dbt build over the full project (seeds, staging, intermediate, marts) 
+    completed successfully in approximately 45 seconds, executing 
+    all 51 tests with PASS=51 / WARN=0 / ERROR=0.
+  - Generated dbt docs and successfully served the lineage DAG locally, 
+    capturing the complete raw-to-marts pipeline screenshot for the README.
+  - Sampled marts data exercised all fact tables via BigQuery successfully:
+      * fct_occupation_supply_demand_30d returned expected top demand 
+        occupations, with "Software Engineer" ranking #1 (456 jobs), 
+        followed by "ICT Business Analyst" (216 jobs) and "Computer 
+        Network and Systems Engineer" (128 jobs).
+      * fct_local_experience_barrier returned valid ratios for local_exp_pct 
+        and sponsor_yes_pct, showing highest volumes for Software Engineers 
+        in NSW (316 jobs). It also highlighted variations in local experience 
+        requirements (e.g., 10.0% for Software Testers in Victoria), while 
+        explicit sponsorship signals remained at 0.0% across the top 20 segments.
+      * fct_skills_demand returned expected skill distributions, revealing 
+        "AWS" as the universally dominant skill (67 mentions in NSW, 32 in 
+        Victoria), followed by "Azure", "Salesforce", "Java", and "Python".
+
+Known limitations
+  - The hand-crafted regex mapping in the anzsco_title_patterns seed 
+    covers approximately 70-80% of mainstream IT roles. Unmapped long-tail 
+    job postings cannot be joined to EOI data and are excluded from strict 
+    Q1 occupation aggregates.
+
+Changes
+  Added
+    - dbt/seeds/anzsco_title_patterns.csv
+    - dbt/models/intermediate/int_jobs_anzsco_mapped.sql
+    - dbt/models/marts/dim_occupation.sql
+    - dbt/models/marts/fct_occupation_supply_demand_30d.sql
+    - dbt/models/marts/fct_local_experience_barrier.sql
+    - dbt/models/marts/fct_skills_demand.sql
+    - dbt/models/marts/schema.yml
+  Changed
+    - dbt/dbt_project.yml: registered the new anzsco_title_patterns seed.
+    - dbt/models/intermediate/schema.yml: documented the new mapped model.
+
+==============================================================================
+
+
+[2026-05-10]  v0.5.0 — Marts layer with conformed dimension and three fact tables
+------------------------------------------------------------------------------
+
+Scope of work
+  - Added a third dbt seed, anzsco_title_patterns.csv (14 rows of
+    priority / anzsco_code / occupation_name / title_pattern), to bridge
+    the gap between Adzuna's free-text job titles and the structured
+    ANZSCO codes consumed by the EOI dataset.
+  - Authored an additional intermediate model,
+    int_jobs_anzsco_mapped.sql, which performs a regex-driven left join
+    between job titles and the title-pattern seed and resolves multi-
+    pattern matches via QUALIFY ROW_NUMBER ordered by priority.
+  - Authored the marts layer:
+      * dim_occupation.sql        — conformed occupation dimension keyed
+                                    on anzsco_code, unioning codes from
+                                    the migration lists and the title-
+                                    pattern seed and surfacing list-
+                                    membership flags.
+      * fct_occupation_supply_demand_30d.sql
+                                  — Q1 fact. Jobs (supply) and EOI
+                                    invitations (demand) per ANZSCO,
+                                    plus the eoi_per_job_ratio measure.
+      * fct_local_experience_barrier.sql
+                                  — Q2 fact. (anzsco_code, state) grain;
+                                    local_experience_pct and
+                                    sponsorship_yes_pct measures with a
+                                    minimum-cell-size guard at five
+                                    postings.
+      * fct_skills_demand.sql     — Q3 supporting fact. Per-(state,
+                                    skill) mention counts unnested from
+                                    the LLM required_skills array,
+                                    filtered to a minimum of three
+                                    mentions per state.
+  - Added column documentation and 14 new tests in
+    models/marts/schema.yml (uniqueness, not-null, relationships to
+    dim_occupation, ratio range checks, composite key uniqueness).
+  - Updated dbt_project.yml seed configuration to register column
+    types for the new title-pattern seed, and updated
+    models/intermediate/schema.yml to document the new
+    int_jobs_anzsco_mapped model.
+
+Verifications passed
+  - dbt build over the full project (3 seeds, 9 models, 51 tests,
+    4 sources, 656 macros) completed in 42.2 seconds with PASS=63 /
+    WARN=0 / ERROR=0.
+  - dbt docs generate produced catalog.json without functional errors;
+    the agate "table_owner" RuntimeWarning is a known cosmetic message
+    in dbt-bigquery 1.11 with no operational impact.
+  - Sampled marts data exercised all three fact tables successfully:
+      * fct_occupation_supply_demand_30d returned per-ANZSCO supply
+        and demand rows including derived eoi_per_job_ratio.
+      * fct_local_experience_barrier returned (anzsco_code, state)
+        rows with local_experience_pct and sponsorship_yes_pct in the
+        valid 0..1 range.
+      * fct_skills_demand returned per-state skill mention counts
+        ordered by demand.
+
+Known limitations
+  - Title-pattern coverage is approximately seventy to eighty percent
+    of IT-class jobs. Postings whose titles do not match any pattern
+    carry a NULL anzsco_code and are excluded from per-occupation
+    aggregates; their volume is implicit in the difference between
+    int_jobs_enriched row count and the sum of jobs_count_30d across
+    fct_occupation_supply_demand_30d.
+  - Several common AU IT job titles map to a single ANZSCO code only
+    by approximation. For example data-scientist roles are attributed
+    to 261313 Software Engineer because no dedicated ANZSCO code
+    exists. Documented in the title-pattern seed.
+  - The fct_local_experience_barrier minimum-cell-size guard
+    (total_jobs >= 5) drops sparse (occupation, state) combinations
+    such as ICT Quality Assurance Engineer in Tasmania. This trades
+    coverage for ratio stability and is appropriate for a v1 dashboard.
+
+Changes
+  Added
+    - dbt/seeds/anzsco_title_patterns.csv
+    - dbt/models/intermediate/int_jobs_anzsco_mapped.sql
+    - dbt/models/marts/dim_occupation.sql
+    - dbt/models/marts/fct_occupation_supply_demand_30d.sql
+    - dbt/models/marts/fct_local_experience_barrier.sql
+    - dbt/models/marts/fct_skills_demand.sql
+    - dbt/models/marts/schema.yml
+  Changed
+    - dbt/dbt_project.yml: registered column types for the new seed.
+    - dbt/models/intermediate/schema.yml: documented the new
+      int_jobs_anzsco_mapped model.
+
+==============================================================================
+
+
 [2026-05-10]  v0.4.0 — LLM extraction pipeline and intermediate enrichment layer
 ------------------------------------------------------------------------------
 

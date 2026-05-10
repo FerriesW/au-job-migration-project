@@ -71,3 +71,27 @@ models:
             combination_of_columns:
               - job_id
               - snapshot_date
+
+  - name: int_jobs_anzsco_mapped
+    description: >
+      View over int_jobs_enriched that adds the inferred ANZSCO code by
+      regex-matching job_title against the anzsco_title_patterns seed.
+      The lowest-priority matching pattern wins; jobs whose title matches
+      no pattern carry a NULL anzsco_code.
+    columns:
+      - name: job_id
+        description: "Adzuna job identifier."
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Logical partition date of the upstream ingestion."
+        tests:
+          - not_null
+      - name: anzsco_code
+        description: "Inferred 6-digit ANZSCO occupation code (nullable)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - job_id
+              - snapshot_date

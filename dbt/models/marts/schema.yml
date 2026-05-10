@@ -1,0 +1,134 @@
+version: 2
+
+models:
+  - name: dim_occupation
+    description: >
+      Conformed occupation dimension. One row per ANZSCO code that appears
+      in either the Home Affairs migration lists or the project's title
+      pattern seed. Carries list-membership flags consumed by every fact.
+    columns:
+      - name: anzsco_code
+        description: "ANZSCO 6-digit occupation code."
+        tests:
+          - unique
+          - not_null
+      - name: occupation_name
+        description: "Human-readable ANZSCO occupation title."
+        tests:
+          - not_null
+      - name: is_mltssl
+        description: "Member of the Medium and Long-term Strategic Skills List."
+      - name: is_stsol
+        description: "Member of the Short-term Skilled Occupation List."
+      - name: is_csol
+        description: "Member of the Combined Skilled Occupation List."
+      - name: list_membership
+        description: "Comma-separated set of list memberships."
+      - name: effective_date
+        description: "Effective date of the latest list-membership snapshot."
+
+  - name: fct_occupation_supply_demand_30d
+    description: >
+      Q1 fact: per-ANZSCO supply (Adzuna jobs over the 30-day window) and
+      demand (EOI invitations over recent rounds), with derived
+      eoi_per_job_ratio. Sponsorship and work-mode counts are surfaced
+      alongside for at-a-glance dashboards.
+    columns:
+      - name: anzsco_code
+        description: "ANZSCO 6-digit occupation code; primary grain."
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_occupation')
+                field: anzsco_code
+      - name: jobs_count_30d
+        description: "Mapped Adzuna postings over the window (excludes unmapped titles)."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: eoi_invitations_recent
+        description: "Sum of invitations issued over the EOI rounds present in the seed."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: eoi_per_job_ratio
+        description: >
+          eoi_invitations_recent / jobs_count_30d. Lower is more favourable
+          to visa applicants (more advertised jobs per EOI invite).
+
+  - name: fct_local_experience_barrier
+    description: >
+      Q2 fact: per-(anzsco_code, state) share of postings that require
+      Australian / local experience and the parallel sponsorship signal.
+      Restricted to combinations with at least five postings to avoid
+      noisy ratios from very small samples.
+    columns:
+      - name: anzsco_code
+        description: "ANZSCO 6-digit occupation code."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_occupation')
+                field: anzsco_code
+      - name: state
+        description: "Australian state extracted from posting location."
+        tests:
+          - not_null
+      - name: total_jobs
+        description: "Number of postings in the (occupation, state) bucket."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 5"
+      - name: local_experience_pct
+        description: "Share of postings requiring local work experience (0..1)."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0 and 1"
+      - name: sponsorship_yes_pct
+        description: "Share of postings explicitly offering visa sponsorship (0..1)."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0 and 1"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - anzsco_code
+              - state
+
+  - name: fct_skills_demand
+    description: >
+      Q3 supporting fact: technical skills mentioned in JD text aggregated
+      by state, suitable for a skills word-cloud or top-N bar visual.
+      Filtered to skills mentioned at least three times per state.
+    columns:
+      - name: state
+        description: "Australian state extracted from posting location."
+        tests:
+          - not_null
+      - name: skill
+        description: "Normalised (lowercase, trimmed) skill identifier."
+        tests:
+          - not_null
+      - name: mention_count
+        description: "Number of postings mentioning the skill in the state."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 3"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - state
+              - skill

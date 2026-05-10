@@ -47,6 +47,12 @@ seeds:
         anzsco_code: string
         points_cutoff: int64
         invitations_issued: int64
+    anzsco_title_patterns:
+      +column_types:
+        priority: int64
+        anzsco_code: string
+        occupation_name: string
+        title_pattern: string
 
 vars:
   analysis_window_days: 30
