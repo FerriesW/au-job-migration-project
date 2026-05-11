@@ -4,7 +4,7 @@
 > skilled migration occupation lists (MLTSSL / STSOL / CSOL) and the real
 > labour market — built for visa applicants navigating their next move.
 
-**Status**: Day 1 — project skeleton initialised. Live dashboard pending Day 8.
+**Status**: actively in development
 
 ---
 
