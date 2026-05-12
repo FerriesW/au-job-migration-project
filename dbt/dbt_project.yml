@@ -53,6 +53,19 @@ seeds:
         anzsco_code: string
         occupation_name: string
         title_pattern: string
+    occupation_ceilings:
+      +column_types:
+        anzsco_unit_group: string
+        unit_group_name: string
+        tier: int64
+        avg_stock: int64
+        annual_ceiling: int64
+        grants_py24_25: int64
+        remaining_py25_26: int64
+        program_year: string
+        source: string
+        source_url: string
+        retrieved_date: date
 
 vars:
   analysis_window_days: 30

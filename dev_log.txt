@@ -7,6 +7,99 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-05-12]  v0.5.1 — Q1 demand proxy migrated from EOI to ANZSCO ceilings
+------------------------------------------------------------------------------
+
+Scope of work
+  - Replaced the EOI-based demand metric in fct_occupation_supply_demand_30d
+    with the Home Affairs SkillSelect annual occupation ceiling (PY25/26) and
+    prior programme-year grants (PY24/25), joined at the 4-digit ANZSCO unit
+    group level.
+  - Authored dbt/seeds/occupation_ceilings.csv (11 rows covering 10 ICT and
+    cross-domain unit groups plus one placeholder row for 2632 ICT Support
+    and Test Engineers, which is absent from the published ceiling list).
+    Each row carries tier, avg_stock, annual_ceiling, grants_py24_25,
+    remaining_py25_26, program_year, source, source_url, and retrieved_date.
+  - Reworked fct_occupation_supply_demand_30d.sql:
+      * Dropped the eoi_aggregates CTE and the LEFT JOIN to stg_eoi.
+      * Added a ceilings CTE joining on substr(anzsco_code, 1, 4).
+      * Renamed measures: eoi_invitations_recent / eoi_per_job_ratio are
+        retired; the model now exposes annual_ceiling, grants_py24_25,
+        remaining_py25_26, jobs_to_ceiling_ratio (jobs_count_30d divided by
+        annual_ceiling) and grants_to_jobs_ratio (grants_py24_25 divided by
+        jobs_count_30d).
+      * Surfaced anzsco_unit_group, unit_group_name, and tier as new columns.
+  - Updated dbt/dbt_project.yml to register occupation_ceilings with typed
+    column definitions.
+  - Updated dbt/models/marts/schema.yml: rewrote the model description and
+    column documentation; added a not_null test on anzsco_unit_group; left
+    annual_ceiling and grants_py24_25 nullable to accommodate unit groups
+    not on the ceiling list.
+  - Updated scripts/verify/day5_marts_check.py: fixed the legacy __TABLES__
+    column reference (table_name -> table_id) and rewrote the Q1 query to
+    select the new ceiling-based columns.
+
+Rationale
+  - The v0.5.0 EOI seed faithfully reflected the Home Affairs public EOI
+    feed, which publishes invitations per round per visa subclass (189 /
+    491) without an ANZSCO breakdown. The join in
+    fct_occupation_supply_demand_30d consequently yielded zero demand for
+    every occupation, breaking the Q1 supply-versus-demand narrative.
+  - The PY25/26 occupation ceiling (released under FOI FA 26/01/00545 and
+    republished by Delta Immigration) is the most defensible public proxy
+    for invitation competition at the occupation level. Combining it with
+    PY24/25 grants exposes the over-allocation pattern in tier-4 ICT unit
+    groups (for example 2613 Software and Applications Programmers issued
+    3,800 grants against a 912 ceiling).
+  - stg_eoi and raw.eoi_invitations remain in the project for dashboard-
+    level aggregate KPIs (total 189 invitations across recent rounds) and
+    are no longer joined to the per-occupation fact.
+
+Verifications passed
+  - dbt build over the full project (4 seeds, 9 models, 50 data tests)
+    completed in 43.5 seconds with PASS=63 / WARN=0 / ERROR=0.
+  - day5_marts_check.py confirmed non-zero ceiling and grants for nine of
+    ten occupations; 263213 ICT Quality Assurance Engineer correctly
+    surfaces NULL because unit group 2632 is absent from the ceiling list.
+  - Sample insights validated against the new measures:
+      * 261313 Software Engineer: 455 jobs / 912 ceiling = 0.499 jobs per
+        ceiling slot; 3,800 grants in PY24/25 against 455 advertised jobs
+        gives a grants_to_jobs ratio of 8.35.
+      * 261111 ICT Business Analyst: 217 jobs / 500 ceiling = 0.434;
+        2,018 grants gives a grants_to_jobs ratio of 9.30.
+      * 263213 ICT Quality Assurance Engineer: 7 jobs with no published
+        ceiling, exposing the "MLTSSL dead end" case for the LinkedIn
+        narrative.
+
+Known limitations
+  - The ceiling join collapses 6-digit ANZSCO codes within the same 4-digit
+    unit group onto a single ceiling value (for example 261311, 261312,
+    261313, and 261314 all share the 2613 ceiling of 912). This is
+    intrinsic to how Home Affairs publishes the cap and is documented in
+    the README and in the model description.
+  - The ceilings seed sources from a third-party republication of the
+    Home Affairs FOI release because the original Home Affairs occupation
+    ceiling page was not reachable at the time of authoring. The Home
+    Affairs FOI reference (FA 26/01/00545) is recorded in the seed.
+
+Changes
+  Added
+    - dbt/seeds/occupation_ceilings.csv
+  Changed
+    - dbt/dbt_project.yml: registered occupation_ceilings column types.
+    - dbt/models/marts/fct_occupation_supply_demand_30d.sql: ceiling-based
+      demand join replaces EOI join.
+    - dbt/models/marts/schema.yml: rewrote model description and column
+      documentation; added not_null test on anzsco_unit_group.
+    - scripts/verify/day5_marts_check.py: __TABLES__ column fix and Q1
+      column rewrite.
+  Retired (logical, files retained)
+    - stg_eoi and raw.eoi_invitations are no longer consumed by Q1; they
+      remain in the project for aggregate-KPI use.
+
+==============================================================================
+
+
 [2026-05-11]  v0.5.0 — Marts layer (Final Fact & Dimension Tables)
 ------------------------------------------------------------------------------
 

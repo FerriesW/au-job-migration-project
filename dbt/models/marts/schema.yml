@@ -29,10 +29,11 @@ models:
 
   - name: fct_occupation_supply_demand_30d
     description: >
-      Q1 fact: per-ANZSCO supply (Adzuna jobs over the 30-day window) and
-      demand (EOI invitations over recent rounds), with derived
-      eoi_per_job_ratio. Sponsorship and work-mode counts are surfaced
-      alongside for at-a-glance dashboards.
+      Q1 fact: per-ANZSCO supply (Adzuna jobs over the 30-day window) joined
+      to the Home Affairs SkillSelect occupation ceiling (PY25/26) and prior
+      programme-year grants (PY24/25) at the 4-digit ANZSCO unit group
+      level. Demand is proxied because Home Affairs does not publish
+      round-level EOI invitations per 6-digit ANZSCO.
     columns:
       - name: anzsco_code
         description: "ANZSCO 6-digit occupation code; primary grain."
@@ -43,6 +44,10 @@ models:
               arguments:
                 to: ref('dim_occupation')
                 field: anzsco_code
+      - name: anzsco_unit_group
+        description: "ANZSCO 4-digit unit group derived from anzsco_code; ceiling join key."
+        tests:
+          - not_null
       - name: jobs_count_30d
         description: "Mapped Adzuna postings over the window (excludes unmapped titles)."
         tests:
@@ -50,17 +55,29 @@ models:
           - dbt_utils.expression_is_true:
               arguments:
                 expression: ">= 0"
-      - name: eoi_invitations_recent
-        description: "Sum of invitations issued over the EOI rounds present in the seed."
-        tests:
-          - not_null
-          - dbt_utils.expression_is_true:
-              arguments:
-                expression: ">= 0"
-      - name: eoi_per_job_ratio
+      - name: annual_ceiling
         description: >
-          eoi_invitations_recent / jobs_count_30d. Lower is more favourable
-          to visa applicants (more advertised jobs per EOI invite).
+          Programme-year invitation cap for the unit group. NULL for unit
+          groups absent from the published ceiling list (e.g. 2632 ICT
+          Support and Test Engineers).
+      - name: grants_py24_25
+        description: >
+          Total visa grants issued in PY24/25 for the unit group (from
+          Home Affairs FOI release). Used together with jobs_count_30d to
+          compute historical competition intensity.
+      - name: remaining_py25_26
+        description: >
+          Remaining PY25/26 invitations as of the FOI snapshot. NULL for
+          tier-3/4 occupations where Home Affairs publishes no remaining
+          balance.
+      - name: jobs_to_ceiling_ratio
+        description: >
+          jobs_count_30d / annual_ceiling. Higher is more favourable to
+          applicants (more advertised jobs per programme-year slot).
+      - name: grants_to_jobs_ratio
+        description: >
+          grants_py24_25 / jobs_count_30d. Higher means heavier historical
+          grant competition relative to current advertised demand.
 
   - name: fct_local_experience_barrier
     description: >
