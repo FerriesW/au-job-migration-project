@@ -256,6 +256,212 @@ Changes
 ==============================================================================
 
 
+[2026-05-14]  v0.6.0 — Power BI connection, data model, and first Q1 visual
+------------------------------------------------------------------------------
+
+Scope of work
+  - Connected Power BI Desktop to BigQuery via the native Google BigQuery
+    connector in Import mode, loading the four marts tables
+    (dim_occupation, fct_occupation_supply_demand_30d,
+    fct_local_experience_barrier, fct_skills_demand).
+  - Built the data model: single-direction one-to-many relationships from
+    dim_occupation[anzsco_code] to both fact tables, hidden technical key
+    columns, applied percentage and currency formats, and authored four
+    base measures (Total Jobs 30d, Occupations Covered, MLTSSL
+    Occupations, Avg Local Experience Rate).
+  - Produced the first Q1 visual: a horizontal bar chart of jobs_count_30d
+    by occupation_name, sorted descending, titled as an insight rather
+    than a field name ("Software Engineering leads AU job demand with 455
+    active roles").
+  - Authored docs/powerbi-setup-guide.md as the reference for the
+    connect / model / visual / publish workflow, including a screenshot
+    fallback for the publish step.
+
+Verifications passed
+  - All four marts tables loaded into the Power BI model with row counts
+    consistent with BigQuery.
+  - The Q1 visual renders the expected ranking: Software Engineer 455,
+    ICT Business Analyst 217, Computer Network and Systems Engineer 128,
+    ICT Security Specialist 104, with the long tail tapering to single
+    digits for Analyst Programmer.
+
+Known limitations
+  - Power BI Service did not expose the "Publish to web" / embed option
+    for the available account, a tenant-level restriction. Per the
+    project plan, a high-resolution PNG export of the dashboard is an
+    accepted substitute for a live link in v1. The screenshot is stored
+    under screenshots/.
+
+Changes
+  Added
+    - docs/powerbi-setup-guide.md
+    - screenshots/ — first Q1 supply-demand bar chart export (PNG)
+  Notes
+    - au-jobs-radar.pbix is gitignored; screenshots, not the binary
+      report file, are version-controlled.
+
+==============================================================================
+
+
+[2026-05-12]  v0.5.1 — Replace zero-valued EOI demand proxy with occupation ceilings
+------------------------------------------------------------------------------
+
+Scope of work
+  - Replaced the Q1 demand metric. The v0.5.0 fact joined stg_eoi to
+    derive eoi_invitations_recent per ANZSCO code, but Home Affairs
+    publishes EOI invitation rounds only by visa subclass (189 / 491),
+    with no per-ANZSCO breakdown. The join in
+    fct_occupation_supply_demand_30d therefore had no valid right-hand
+    keys and every occupation returned zero invitations.
+  - Added dbt/seeds/occupation_ceilings.csv: 11 rows covering 10 ICT and
+    cross-domain ANZSCO unit groups (2613 Software and Applications
+    Programmers, 2611 ICT Business and Systems Analysts, 2621 Database /
+    Sysadmin / Security, 2631 Computer Network Professionals, 2247
+    Management and Organisation Analysts, 2612, 2633, 3132, 2211, 2212)
+    plus a NULL-ceiling placeholder for 2632 ICT Support and Test
+    Engineers, which is absent from the published list. Columns:
+    anzsco_unit_group, unit_group_name, tier, avg_stock, annual_ceiling,
+    grants_py24_25, remaining_py25_26, program_year, source, source_url,
+    retrieved_date.
+  - Rewrote dbt/models/marts/fct_occupation_supply_demand_30d.sql:
+    dropped the stg_eoi LEFT JOIN; added a ceilings CTE joining on
+    substr(anzsco_code, 1, 4) to the 4-digit unit group. New columns:
+    anzsco_unit_group, unit_group_name, tier, annual_ceiling,
+    grants_py24_25, remaining_py25_26, ceiling_program_year,
+    jobs_to_ceiling_ratio (jobs_count_30d / annual_ceiling), and
+    grants_to_jobs_ratio (grants_py24_25 / jobs_count_30d). Retired:
+    eoi_invitations_recent, eoi_latest_round, eoi_per_job_ratio.
+  - Registered occupation_ceilings in dbt_project.yml with typed column
+    definitions; updated dbt/models/marts/schema.yml with the rewritten
+    model description, the new column documentation, and a not_null test
+    on anzsco_unit_group. annual_ceiling and grants_py24_25 are left
+    nullable to accommodate unit groups absent from the ceiling list.
+  - Rewrote scripts/verify/day5_marts_check.py: Q1 query updated to
+    select the ceiling-based columns; fixed a legacy __TABLES__
+    regression (table_name -> table_id).
+  - Updated migration-job-dashboard-plan.md sections 2.2, 5, and 6 to
+    record the demand-proxy change.
+
+Verifications passed
+  - dbt build completed with PASS=63 / WARN=0 / ERROR=0 in 43.5 seconds.
+  - scripts/verify/day5_marts_check.py confirmed Q1 now exposes non-zero
+    ceiling, grants, and the two derived ratios for nine of ten
+    dim_occupation entries. Sample: Software Engineer (2613) shows 455
+    jobs against a 912 ceiling and 3,800 PY24/25 grants
+    (jobs_to_ceiling 0.499, grants_to_jobs 8.35); ICT Business Analyst
+    (2611) shows 217 jobs against a 500 ceiling and 2,018 grants.
+
+Known limitations
+  - The ceiling join collapses 6-digit ANZSCO codes within the same
+    4-digit unit group onto a single ceiling value (261311, 261312,
+    261313, and 261314 all share the 2613 ceiling of 912). This is
+    intrinsic to how Home Affairs publishes the cap; the anzsco_unit_group
+    column is surfaced for transparency.
+  - The ceilings seed sources from a third-party republication (Delta
+    Immigration) of the Home Affairs FOI release FA 26/01/00545; the
+    original Home Affairs occupation-ceiling page was not reachable at
+    authoring time. The FOI reference is recorded in the seed's source
+    column.
+
+Defects resolved
+  - eoi_invitations_recent equalled zero for every row in
+    fct_occupation_supply_demand_30d. Root cause: the EOI seed faithfully
+    reflected the public Home Affairs feed, which lacks ANZSCO-level
+    granularity. Resolved by replacing the join key entirely with the
+    occupation ceiling at the 4-digit unit-group level.
+  - scripts/verify/day5_marts_check.py inventory query raised
+    "Unrecognized name: table_name" against the legacy __TABLES__ view;
+    switched to "table_id AS table_name".
+
+Changes
+  Added
+    - dbt/seeds/occupation_ceilings.csv
+  Changed
+    - dbt/models/marts/fct_occupation_supply_demand_30d.sql: EOI join
+      replaced with occupation-ceiling join at the unit-group level.
+    - dbt/models/marts/schema.yml: rewritten Q1 model docs and tests.
+    - dbt/dbt_project.yml: registered the occupation_ceilings seed.
+    - scripts/verify/day5_marts_check.py: ceiling-based Q1 query and
+      __TABLES__ fix.
+    - migration-job-dashboard-plan.md: demand-proxy change documented.
+  Fixed
+    - Zero-valued EOI demand proxy across the entire Q1 fact table.
+    - __TABLES__ column-name regression in the marts verification script.
+  Notes
+    - stg_eoi and raw.eoi_invitations remain in the project for
+      dashboard-level aggregate KPIs (total 189 invitations across recent
+      rounds) but no longer feed the per-occupation fact.
+
+
+==============================================================================
+
+
+[2026-05-11]  v0.5.0 — Marts layer with occupation dimension and three fact tables
+------------------------------------------------------------------------------
+
+Scope of work
+  - Added dbt/seeds/anzsco_title_patterns.csv: 14 rows of
+    (priority, anzsco_code, occupation_name, title_pattern) triples that
+    map free-text job titles to ANZSCO codes via regex. Adzuna does not
+    carry ANZSCO codes natively; this seed is the project's mapping
+    bridge.
+  - Authored dbt/models/intermediate/int_jobs_anzsco_mapped.sql: a view
+    over int_jobs_enriched that regex-matches job_title against the
+    pattern seed and, where multiple patterns match, keeps the
+    lowest-priority hit via QUALIFY ROW_NUMBER(). Titles matching no
+    pattern carry a NULL anzsco_code.
+  - Authored the marts layer:
+      * dim_occupation.sql — conformed occupation dimension built from
+        the union of ANZSCO codes appearing in the migration lists and
+        the title-pattern seed, with list-membership flags.
+      * fct_occupation_supply_demand_30d.sql — Q1 fact, one row per
+        ANZSCO code (initial version joined stg_eoi for the demand
+        metric; superseded by v0.5.1).
+      * fct_local_experience_barrier.sql — Q2 fact, one row per
+        (anzsco_code, state), exposing the share of postings requiring
+        local experience and the parallel sponsorship share; restricted
+        to buckets of at least five postings.
+      * fct_skills_demand.sql — Q3 supporting fact, one row per
+        (state, skill) from the unnested required_skills array, filtered
+        to skills mentioned at least three times per state.
+  - Documented all four marts models in dbt/models/marts/schema.yml with
+    column-level and model-level tests, including relationships tests
+    from both fact tables back to dim_occupation.
+  - Extended dbt/models/intermediate/schema.yml with documentation and
+    tests for int_jobs_anzsco_mapped.
+  - Registered anzsco_title_patterns in dbt_project.yml with typed
+    columns.
+
+Verifications passed
+  - dbt build over the full project (seeds + staging + intermediate +
+    marts + tests) completed successfully with all data tests green.
+  - Diagnostic SQL confirmed dim_occupation resolved one row per ANZSCO
+    code and the three fact tables materialised at their declared grains.
+
+Known limitations discovered during validation
+  - The Q1 demand metric, sourced from stg_eoi, returned zero for every
+    occupation because Home Affairs publishes EOI rounds only by visa
+    subclass with no ANZSCO breakdown. Tracked and resolved in v0.5.1.
+  - The title-pattern seed covers an estimated 70-80 percent of IT job
+    titles; unmatched titles carry a NULL anzsco_code and are excluded
+    from per-occupation aggregation.
+
+Changes
+  Added
+    - dbt/seeds/anzsco_title_patterns.csv
+    - dbt/models/intermediate/int_jobs_anzsco_mapped.sql
+    - dbt/models/marts/dim_occupation.sql
+    - dbt/models/marts/fct_occupation_supply_demand_30d.sql
+    - dbt/models/marts/fct_local_experience_barrier.sql
+    - dbt/models/marts/fct_skills_demand.sql
+    - dbt/models/marts/schema.yml
+  Changed
+    - dbt/models/intermediate/schema.yml: documented int_jobs_anzsco_mapped.
+    - dbt/dbt_project.yml: registered the anzsco_title_patterns seed.
+
+==============================================================================
+
+
 [2026-05-10]  v0.4.0 — LLM extraction pipeline and intermediate enrichment layer
 ------------------------------------------------------------------------------
 
