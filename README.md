@@ -38,26 +38,6 @@ The pipeline follows a staging → intermediate → marts pattern over four raw 
 | BI | Power BI Desktop → Publish to Web |
 | Orchestration | GitHub Actions cron (v1) |
 
-## Getting started (development)
-
-```bash
-# 1. Install uv (if not already)
-# Windows: powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-# macOS / Linux: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. Clone & sync dependencies
-git clone <this-repo>
-cd au_job_radar_github
-uv sync
-
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your Adzuna / GCP / DashScope credentials
-
-# 4. Run Day-0 Adzuna sanity check
-uv run python scripts/day0_verify_adzuna.py
-```
-
 ## Project structure
 
 ```
