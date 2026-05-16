@@ -256,6 +256,159 @@ Changes
 ==============================================================================
 
 
+[2026-05-15]  v0.8.0 — Dashboard polish, theme, methodology page, screenshots
+------------------------------------------------------------------------------
+
+Scope of work
+  - Authored docs/powerbi-theme.json — a Power BI report theme carrying
+    the project palette (low-saturation blue-green primary #3E7C8B and
+    warm orange highlight #E08A3C) plus background, foreground, table
+    accent, and sentiment colours. The theme is imported once via View
+    > Themes > Browse for themes and propagates to all pages.
+  - Applied orange highlight (#E08A3C) to the rank-one item in four
+    visuals as a single-thread storytelling device: Software Engineer in
+    the supply bar, Software Tester in the local-experience barrier bar,
+    AWS in the skills bar, and the Software Engineer bubble in the Q1
+    scatter. All four orange items converge on the dashboard's main
+    recommendation to visa applicants.
+  - Cleaned residual auto-generated titles and axis labels (e.g.
+    "Sum of jobs_count_30d" -> "Active job postings (past 30 days)")
+    so every label reads as a finding rather than a field name.
+  - Added a Methodology sub-page documenting the four data sources
+    (Adzuna, Home Affairs occupation lists, Home Affairs SkillSelect
+    ceilings, Qwen-Turbo extraction), the end-to-end pipeline, three
+    named limitations, refresh cadence, and the source-code reference.
+  - Captured six high-resolution PNG screenshots into screenshots/:
+    dashboard-hero, q1-supply-demand, q2-local-experience, q3-skills,
+    methodology, dbt-lineage. README and the LinkedIn article reference
+    these in lieu of a live Publish-to-Web link.
+  - Authored docs/powerbi-polish-guide.md as the polish manual covering
+    Tracks A-E (titles, theme, highlights, methodology, screenshots).
+
+Verifications passed
+  - All six visuals render in the imported palette with the four
+    orange-highlighted rank-one items.
+  - The Methodology page reads as continuous prose at standard
+    text-box width after the initial paste was rebuilt without hard
+    line breaks.
+  - Six screenshots saved under screenshots/ at resolutions suitable
+    for the README and LinkedIn article.
+
+Defects resolved
+  - The initial theme JSON used a nested object for the `null` colour
+    and a verbose visualStyles section. Power BI rejected the file with
+    "JSON syntax was invalid, missing required property 'name', used
+    invalid colors, or provided invalid top-level properties." Reduced
+    the theme to a minimum-viable schema (name, dataColors, background,
+    foreground, tableAccent, sentiment colours) which imports cleanly.
+  - The first Methodology paste preserved the hard line wraps from the
+    source markdown, causing the text to occupy only the left third of
+    the page. Replaced with flat paragraphs that auto-wrap at the
+    text-box width.
+  - The classic Filled Map visual carried a "this visual type is being
+    retired soon" banner and looked sparse on a three-state colouring.
+    After a design iteration through Azure Maps and a bar-by-state
+    fallback, the final layout keeps a small filled map in the
+    bottom-left corner with the bulk of the canvas reserved for the
+    more information-dense bar charts and the Q1 scatter.
+
+Known limitations
+  - Power BI Service did not expose the Publish-to-Web embed option
+    for the available account (a tenant-level restriction). The v1
+    dashboard ships as high-resolution PNGs rather than a live link;
+    the project plan permits this fallback explicitly.
+
+Changes
+  Added
+    - docs/powerbi-theme.json
+    - docs/powerbi-polish-guide.md
+    - screenshots/dashboard-hero.png
+    - screenshots/q1-supply-demand.png
+    - screenshots/q2-local-experience.png
+    - screenshots/q3-skills.png
+    - screenshots/methodology.png
+    - screenshots/dbt-lineage.png
+  Changed
+    - Power BI .pbix (local, gitignored): theme applied, orange
+      highlights added, Methodology sub-page authored, axis labels
+      cleaned.
+
+==============================================================================
+
+
+[2026-05-15]  v0.7.0 — Single-page Visa Applicant View dashboard
+------------------------------------------------------------------------------
+
+Scope of work
+  - Built the Power BI data model on the four marts tables: hidden
+    technical key columns, applied percentage and currency formats,
+    and authored five DAX measures (Total Jobs 30d, Occupations
+    Covered, MLTSSL Occupations, Local Experience Rate, Sponsorship
+    Offered Rate).
+  - Produced a three-column single-page layout: a vertical KPI stack
+    on the left, a centre column with the Q2 local-experience bar
+    chart over the Q1 supply bar chart, and a right column with the
+    Q3 skills bar chart over the Q1 four-quadrant scatter. A small
+    filled map sits beneath the KPIs.
+  - Each of the six visuals carries an insight-style title rather
+    than a field-name title.
+  - The Q1 scatter applies jobs_count_30d >= 20 as a visual filter to
+    suppress noise occupations and a log-scale Y axis to surface
+    points that would otherwise compress to the X axis under the
+    skew of one outlier occupation. Median X and Y constant lines
+    divide the plot into the four quadrants.
+  - Authored docs/powerbi-dashboard-guide.md as the build manual for
+    the dashboard.
+
+Verifications passed
+  - The KPI row reads 1,010 mapped IT roles, 10 occupations with
+    demand, and 9 MLTSSL occupations tracked.
+  - The Q1 supply chart ranks Software Engineer (455), ICT Business
+    Analyst (217), Computer Network and Systems Engineer (128), and
+    ICT Security Specialist (104) in descending order.
+  - The Q2 barrier chart ranks Software Tester, Computer Network, and
+    ICT Security Specialist as the top three; Software Engineer
+    appears with the lowest rate among the populated occupations.
+  - The Q3 skills chart ranks AWS, Azure, and Salesforce as the top
+    three, an order consistent with the AU IT market favouring
+    platform skills over raw programming languages.
+
+Defects resolved
+  - The Day 6 "Avg Local Experience Rate" measure used a simple
+    AVERAGEX over the per-(occupation, state) percentages and therefore
+    ignored bucket weighting (Simpson's paradox). Replaced with
+    DIVIDE(SUM(local_experience_count), SUM(total_jobs)), which returns
+    the correctly weighted rate at any aggregation grain.
+  - The first version of the Q1 scatter compressed all points against
+    the X axis because one occupation with jobs_count_30d in single
+    digits produced a grants_to_jobs_ratio in the hundreds. Resolved
+    with a visual filter (jobs_count_30d >= 20) and a Y-axis log scale.
+  - Iterated through three layout options before settling on the
+    final three-column grid. Earlier vertical-KPIs-with-stacked-bars
+    arrangements suffered from imbalanced visual weight; the eventual
+    three-column grid with a small corner map gives every visual
+    comparable canvas area while keeping the geography element
+    de-emphasised.
+
+Known limitations
+  - The title-pattern dictionary maps approximately 1,010 of the
+    3,975 enriched postings to ANZSCO codes; the remaining 2,965 are
+    excluded from per-occupation aggregations.
+  - Local Experience Rate is approximately one percent in absolute
+    terms; the headline insight is the relative ordering across
+    states and occupations, not the absolute level. The Methodology
+    page (v0.8.0) documents this.
+
+Changes
+  Added
+    - docs/powerbi-dashboard-guide.md
+  Changed
+    - Power BI .pbix (local, gitignored): data model built, five
+      measures authored, six visuals laid out on a single page.
+
+==============================================================================
+
+
 [2026-05-14]  v0.6.0 — Power BI connection, data model, and first Q1 visual
 ------------------------------------------------------------------------------
 
