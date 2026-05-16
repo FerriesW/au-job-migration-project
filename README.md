@@ -218,5 +218,5 @@ Master of Data Science from the University of Melbourne, with prior
 industry-collaboration experience at SANDSTAR (Power BI dashboards
 adopted by company leadership for strategic communication) and Metro
 Trains Melbourne (PostgreSQL/PostGIS spatial database design). LLM
-evaluation experience at iFLYTEK Smart City. Open to data analyst,
-data engineer, and analytics engineer roles in Melbourne.
+evaluation experience at iFLYTEK Smart City. Open to data analyst, 
+data engineer, and analytics engineer roles in Australia
