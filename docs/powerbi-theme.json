@@ -1,0 +1,22 @@
+{
+    "name": "AU Migration & Jobs Radar",
+    "dataColors": [
+        "#3E7C8B",
+        "#E08A3C",
+        "#6BA3B0",
+        "#1F5566",
+        "#92C5CE",
+        "#C66A1F",
+        "#5DABBA",
+        "#A8541B"
+    ],
+    "background": "#FFFFFF",
+    "foreground": "#3C3C3C",
+    "tableAccent": "#3E7C8B",
+    "good": "#3E7C8B",
+    "neutral": "#92C5CE",
+    "bad": "#E08A3C",
+    "maximum": "#1F5566",
+    "center": "#6BA3B0",
+    "minimum": "#C8DDE3"
+}
