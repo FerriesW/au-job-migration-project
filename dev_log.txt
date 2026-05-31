@@ -256,6 +256,79 @@ Changes
 ==============================================================================
 
 
+[2026-05-16]  v0.9.0 — Snowflake adapter and multi-cloud dbt target
+------------------------------------------------------------------------------
+
+Scope of work
+  - Authored docs/snowflake-setup-guide.md as the procedural reference for
+    the Snowflake side of the multi-cloud (Theme B) track: free-trial
+    signup, warehouse / database / schemas / role / user provisioning,
+    connection cheat sheet, and a from-CLI dbt smoke test.
+  - Provisioned the Snowflake free-trial workspace mirroring the
+    BigQuery layout:
+      * AU_JOBS_RADAR database with RAW, STAGING, and MARTS schemas.
+      * COMPUTE_WH X-Small warehouse with AUTO_SUSPEND = 60 and
+        INITIALLY_SUSPENDED = TRUE to preserve the 30-day trial credits.
+      * Dedicated DBT_ROLE and DBT_USER for adapter authentication,
+        with grants scoped to the warehouse and the three schemas.
+  - Added dbt-snowflake >= 1.8.0 to pyproject.toml's `dbt` optional
+    dependency group; existing dbt-bigquery installation remains
+    untouched.
+  - Extended dbt/profiles.yml.example with a `dev_sf` target alongside
+    the existing `dev` and `prod` BigQuery targets. All credentials are
+    sourced via env_var() interpolation; the schema-routing
+    generate_schema_name macro (added in v0.5.0) propagates the
+    `+schema:` configs in dbt_project.yml to Snowflake's RAW / STAGING /
+    MARTS schemas just as it does for BigQuery datasets.
+  - Added a Snowflake credentials section to .env.example documenting
+    the six environment variables (SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER,
+    SNOWFLAKE_PASSWORD, SNOWFLAKE_ROLE, SNOWFLAKE_WAREHOUSE,
+    SNOWFLAKE_DATABASE) that dev_sf consumes.
+
+Verifications passed
+  - uv sync --all-extras installed dbt-snowflake 1.11.5 alongside its
+    snowflake-connector-python transitive dependencies without
+    conflicts.
+  - dbt debug --project-dir dbt --profiles-dir dbt --target dev_sf
+    reported "Connection test: [OK connection ok]" and
+    "All checks passed!" against account qflbzni-dp68214, confirming
+    that DBT_ROLE has the warehouse, database, and schema usage rights
+    required for a downstream dbt build.
+
+Known limitations
+  - Data has not yet been migrated from BigQuery into Snowflake; the
+    dev_sf target's schemas are currently empty. The next deliverable
+    (sync_bq_to_snowflake.py) loads the raw layer into Snowflake, after
+    which dbt build --target dev_sf will materialise the
+    staging / intermediate / marts layers from the same model files
+    that the BigQuery target uses, completing the cross-warehouse
+    portability proof.
+
+Defects resolved
+  - The Snowflake guide's initial Step 4 SQL block separated
+    CREATE DATABASE, USE DATABASE, and CREATE SCHEMA statements on the
+    assumption that Snowsight worksheets persist session context
+    between independent runs. They do not — each Run-button click
+    starts in the default context unless the SQL selection includes
+    the USE statements. Updated the guide and the user-facing
+    corrected SQL to use fully-qualified schema names
+    (AU_JOBS_RADAR.RAW, AU_JOBS_RADAR.STAGING, AU_JOBS_RADAR.MARTS) so
+    that schema creation does not depend on session state, and
+    documented the "select-all then Ctrl+Enter" convention for
+    multi-statement blocks.
+
+Changes
+  Added
+    - docs/snowflake-setup-guide.md
+  Changed
+    - pyproject.toml: dbt optional dependencies now include
+      dbt-snowflake >= 1.8.0.
+    - dbt/profiles.yml.example: new dev_sf target with env_var() macros.
+    - .env.example: Snowflake credentials section.
+
+==============================================================================
+
+
 [2026-05-15]  v0.8.0 — Dashboard polish, theme, methodology page, screenshots
 ------------------------------------------------------------------------------
 

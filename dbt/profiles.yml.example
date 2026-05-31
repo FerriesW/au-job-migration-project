@@ -25,3 +25,20 @@ au_jobs_radar:
       timeout_seconds: 300
       priority: batch
       job_retries: 2
+
+    # Snowflake target for the multi-cloud (Theme B) track.
+    # Schema routing (RAW / STAGING / MARTS) is handled by the
+    # generate_schema_name macro plus +schema configs in dbt_project.yml,
+    # so the default schema here is STAGING.
+    dev_sf:
+      type: snowflake
+      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user:      "{{ env_var('SNOWFLAKE_USER') }}"
+      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role:      "{{ env_var('SNOWFLAKE_ROLE', 'DBT_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      database:  "{{ env_var('SNOWFLAKE_DATABASE', 'AU_JOBS_RADAR') }}"
+      schema:    STAGING
+      threads: 4
+      client_session_keep_alive: False
+      query_tag: au_jobs_radar
