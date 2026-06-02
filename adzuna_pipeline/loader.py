@@ -18,46 +18,60 @@ RAW_TABLE_NAME: Final[str] = "adzuna_jobs"
 # --- Schema ----------------------------------------------------------------
 
 ADZUNA_JOBS_SCHEMA: Final[list[bigquery.SchemaField]] = [
-    bigquery.SchemaField("snapshot_date", "DATE", mode="REQUIRED",
-                         description="Logical partition date for the snapshot."),
-    bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED",
-                         description="Timestamp the record was uploaded to GCS."),
-    bigquery.SchemaField("source_city", "STRING", mode="REQUIRED",
-                         description="City filter that produced this record."),
-
-    bigquery.SchemaField("id", "STRING", mode="REQUIRED",
-                         description="Adzuna job id."),
+    bigquery.SchemaField(
+        "snapshot_date",
+        "DATE",
+        mode="REQUIRED",
+        description="Logical partition date for the snapshot.",
+    ),
+    bigquery.SchemaField(
+        "ingested_at",
+        "TIMESTAMP",
+        mode="REQUIRED",
+        description="Timestamp the record was uploaded to GCS.",
+    ),
+    bigquery.SchemaField(
+        "source_city",
+        "STRING",
+        mode="REQUIRED",
+        description="City filter that produced this record.",
+    ),
+    bigquery.SchemaField("id", "STRING", mode="REQUIRED", description="Adzuna job id."),
     bigquery.SchemaField("title", "STRING", mode="NULLABLE"),
     bigquery.SchemaField("description", "STRING", mode="NULLABLE"),
-    bigquery.SchemaField("created", "TIMESTAMP", mode="NULLABLE",
-                         description="Job creation timestamp from Adzuna."),
+    bigquery.SchemaField(
+        "created", "TIMESTAMP", mode="NULLABLE", description="Job creation timestamp from Adzuna."
+    ),
     bigquery.SchemaField("redirect_url", "STRING", mode="NULLABLE"),
     bigquery.SchemaField("adref", "STRING", mode="NULLABLE"),
-
     bigquery.SchemaField("salary_min", "FLOAT", mode="NULLABLE"),
     bigquery.SchemaField("salary_max", "FLOAT", mode="NULLABLE"),
     bigquery.SchemaField("salary_is_predicted", "STRING", mode="NULLABLE"),
     bigquery.SchemaField("contract_type", "STRING", mode="NULLABLE"),
     bigquery.SchemaField("contract_time", "STRING", mode="NULLABLE"),
-
     bigquery.SchemaField("latitude", "FLOAT", mode="NULLABLE"),
     bigquery.SchemaField("longitude", "FLOAT", mode="NULLABLE"),
-
     bigquery.SchemaField(
-        "location", "RECORD", mode="NULLABLE",
+        "location",
+        "RECORD",
+        mode="NULLABLE",
         fields=[
             bigquery.SchemaField("display_name", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("area", "STRING", mode="REPEATED"),
         ],
     ),
     bigquery.SchemaField(
-        "company", "RECORD", mode="NULLABLE",
+        "company",
+        "RECORD",
+        mode="NULLABLE",
         fields=[
             bigquery.SchemaField("display_name", "STRING", mode="NULLABLE"),
         ],
     ),
     bigquery.SchemaField(
-        "category", "RECORD", mode="NULLABLE",
+        "category",
+        "RECORD",
+        mode="NULLABLE",
         fields=[
             bigquery.SchemaField("tag", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("label", "STRING", mode="NULLABLE"),
@@ -67,6 +81,7 @@ ADZUNA_JOBS_SCHEMA: Final[list[bigquery.SchemaField]] = [
 
 
 # --- Loader ----------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class LoadResult:
@@ -107,7 +122,8 @@ class BigQueryRawLoader:
         self._location: str = location or settings.location
         self._table_name: str = table_name
         self._client: bigquery.Client = bigquery.Client(
-            project=self._project_id, location=self._location,
+            project=self._project_id,
+            location=self._location,
         )
 
     @property
@@ -176,7 +192,10 @@ class BigQueryRawLoader:
         load_job.result()
         LOGGER.info(
             "Load complete: table=%s rows=%s bytes=%s job=%s",
-            self.table_id, load_job.output_rows, load_job.input_file_bytes, load_job.job_id,
+            self.table_id,
+            load_job.output_rows,
+            load_job.input_file_bytes,
+            load_job.job_id,
         )
         return LoadResult(
             table_id=self.table_id,
@@ -197,9 +216,6 @@ class BigQueryRawLoader:
         Useful when re-running an ingestion idempotently and avoiding duplicates
         from a prior failed run on the same date.
         """
-        query = (
-            f"DELETE FROM `{self.table_id}` "
-            f"WHERE snapshot_date = DATE('{snapshot_date}')"
-        )
+        query = f"DELETE FROM `{self.table_id}` WHERE snapshot_date = DATE('{snapshot_date}')"
         self._client.query(query).result()
         LOGGER.info("Deleted partition snapshot_date=%s from %s", snapshot_date, self.table_id)

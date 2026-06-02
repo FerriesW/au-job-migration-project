@@ -7,10 +7,10 @@ import json
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Final
+from datetime import UTC, date, datetime
+from typing import Any, Final
 
-from google.cloud import storage
+from google.cloud import storage  # type: ignore[attr-defined]
 
 from .config import get_gcp
 
@@ -47,11 +47,7 @@ def build_blob_key(
 ) -> str:
     """Construct the canonical GCS object key for an Adzuna snapshot."""
     safe_label = partition_label.lower().replace(" ", "-")
-    return (
-        f"{DATASET_PREFIX}/"
-        f"{PARTITION_KEY}={snapshot_date.isoformat()}/"
-        f"{safe_label}.{extension}"
-    )
+    return f"{DATASET_PREFIX}/{PARTITION_KEY}={snapshot_date.isoformat()}/{safe_label}.{extension}"
 
 
 class GcsRawUploader:
@@ -81,7 +77,7 @@ class GcsRawUploader:
 
     def upload_jsonl(
         self,
-        rows: Iterable[dict],
+        rows: Iterable[dict[str, Any]],
         *,
         snapshot_date: date,
         partition_label: str,
@@ -106,7 +102,7 @@ class GcsRawUploader:
         )
         blob = self._bucket.blob(blob_key)
 
-        ingested_at = datetime.now(tz=timezone.utc).isoformat()
+        ingested_at = datetime.now(tz=UTC).isoformat()
         snapshot_iso = snapshot_date.isoformat()
 
         line_count = 0
@@ -133,7 +129,9 @@ class GcsRawUploader:
         gcs_uri = f"gs://{self._bucket_name}/{blob_key}"
         LOGGER.info(
             "Uploaded %s rows (%s bytes) to %s",
-            line_count, len(buffer), gcs_uri,
+            line_count,
+            len(buffer),
+            gcs_uri,
         )
         return UploadResult(
             gcs_uri=gcs_uri,

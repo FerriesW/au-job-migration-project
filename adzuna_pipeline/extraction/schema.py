@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -60,7 +60,7 @@ def _normalise_enum_input(value: Any, aliases: dict[str, str]) -> Any:
     return aliases.get(cleaned, cleaned)
 
 
-class SponsorshipSignal(str, Enum):
+class SponsorshipSignal(StrEnum):
     """Visa-sponsorship intent extracted from the description text."""
 
     EXPLICIT_YES = "explicit_yes"
@@ -68,7 +68,7 @@ class SponsorshipSignal(str, Enum):
     UNSPECIFIED = "unspecified"
 
 
-class RemoteFriendly(str, Enum):
+class RemoteFriendly(StrEnum):
     """Work-mode disposition extracted from the description text."""
 
     REMOTE = "remote"

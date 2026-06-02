@@ -7,8 +7,8 @@ import logging
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Final
+from datetime import UTC, date, datetime
+from typing import Any, Final
 
 from google.cloud import bigquery
 
@@ -31,8 +31,7 @@ EXTRACT_SCHEMA: Final[list[bigquery.SchemaField]] = [
     bigquery.SchemaField("remote_friendly", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("model_version", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("extracted_at", "TIMESTAMP", mode="REQUIRED"),
-    bigquery.SchemaField("extraction_status", "STRING", mode="REQUIRED",
-                         description="ok | error"),
+    bigquery.SchemaField("extraction_status", "STRING", mode="REQUIRED", description="ok | error"),
     bigquery.SchemaField("error_message", "STRING", mode="NULLABLE"),
 ]
 
@@ -62,7 +61,7 @@ class ExtractionRecord:
     extraction_status: str
     error_message: str | None
 
-    def to_bq_row(self) -> dict:
+    def to_bq_row(self) -> dict[str, Any]:
         """Serialise to a JSON-friendly dict matching ``EXTRACT_SCHEMA``."""
         return {
             "job_id": self.job_id,
@@ -163,7 +162,9 @@ class ExtractionBatchProcessor:
             date_clause = "AND j.snapshot_date = @snapshot_date"
             params.append(
                 bigquery.ScalarQueryParameter(
-                    "snapshot_date", "DATE", snapshot_date.isoformat(),
+                    "snapshot_date",
+                    "DATE",
+                    snapshot_date.isoformat(),
                 )
             )
 
@@ -215,9 +216,7 @@ class ExtractionBatchProcessor:
         self.ensure_table()
 
         suffix = int(time.time() * 1000)
-        temp_table_id = (
-            f"{self._project_id}.{self._dataset}._{EXTRACT_TABLE_NAME}_temp_{suffix}"
-        )
+        temp_table_id = f"{self._project_id}.{self._dataset}._{EXTRACT_TABLE_NAME}_temp_{suffix}"
 
         load_config = bigquery.LoadJobConfig(
             schema=EXTRACT_SCHEMA,
@@ -226,7 +225,9 @@ class ExtractionBatchProcessor:
         )
         rows = [r.to_bq_row() for r in records]
         load_job = self._client.load_table_from_json(
-            rows, temp_table_id, job_config=load_config,
+            rows,
+            temp_table_id,
+            job_config=load_config,
         )
         load_job.result()
 
@@ -256,9 +257,7 @@ class ExtractionBatchProcessor:
     def row_count(self) -> int:
         """Return the row count of the extract table (creates it if missing)."""
         self.ensure_table()
-        result = list(self._client.query(
-            f"SELECT COUNT(*) AS n FROM `{self.table_id}`"
-        ).result())
+        result = list(self._client.query(f"SELECT COUNT(*) AS n FROM `{self.table_id}`").result())
         return int(result[0].n)
 
     # --- Async extraction ---------------------------------------------- #
@@ -300,7 +299,7 @@ class ExtractionBatchProcessor:
         sem: asyncio.Semaphore,
     ) -> ExtractionRecord:
         async with sem:
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             settings = get_dashscope()
             model_version = f"{settings.model}@{now.date().isoformat()}"
             try:

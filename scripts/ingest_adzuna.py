@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Final
 
@@ -20,7 +20,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 # Module imports must follow load_dotenv so config classes pick up env values.
 from adzuna_pipeline.client import (  # noqa: E402
-    AdzunaApiError, AdzunaClient, SearchQuery,
+    AdzunaApiError,
+    AdzunaClient,
+    SearchQuery,
 )
 from adzuna_pipeline.loader import BigQueryRawLoader  # noqa: E402
 from adzuna_pipeline.storage import GcsRawUploader, UploadResult  # noqa: E402
@@ -66,7 +68,7 @@ def _parse_cities(value: str) -> list[str]:
 
 def _parse_snapshot_date(value: str | None) -> date:
     if not value:
-        return datetime.now(tz=timezone.utc).date()
+        return datetime.now(tz=UTC).date()
     return date.fromisoformat(value)
 
 
@@ -123,16 +125,18 @@ def main(
         raise typer.Exit(code=2)
 
     snapshot = _parse_snapshot_date(snapshot_date)
-    console.print(Panel.fit(
-        f"[bold]Adzuna ingestion[/bold]\n"
-        f"snapshot_date=[cyan]{snapshot.isoformat()}[/cyan]  "
-        f"cities=[cyan]{', '.join(target_cities)}[/cyan]  "
-        f"category=[cyan]{category}[/cyan]  "
-        f"max_pages=[cyan]{max_pages}[/cyan]  "
-        f"max_days_old=[cyan]{max_days_old}[/cyan]  "
-        f"dry_run=[cyan]{dry_run}[/cyan]",
-        border_style="blue",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]Adzuna ingestion[/bold]\n"
+            f"snapshot_date=[cyan]{snapshot.isoformat()}[/cyan]  "
+            f"cities=[cyan]{', '.join(target_cities)}[/cyan]  "
+            f"category=[cyan]{category}[/cyan]  "
+            f"max_pages=[cyan]{max_pages}[/cyan]  "
+            f"max_days_old=[cyan]{max_days_old}[/cyan]  "
+            f"dry_run=[cyan]{dry_run}[/cyan]",
+            border_style="blue",
+        )
+    )
 
     uploader = GcsRawUploader()
     loader: BigQueryRawLoader | None = None
@@ -184,13 +188,15 @@ def main(
                     f"(job {load_result.job_id})"
                 )
 
-            reports.append(CityIngestReport(
-                city=city,
-                total_count=total_count,
-                fetched_rows=len(rows),
-                upload=upload,
-                rows_loaded=rows_loaded,
-            ))
+            reports.append(
+                CityIngestReport(
+                    city=city,
+                    total_count=total_count,
+                    fetched_rows=len(rows),
+                    upload=upload,
+                    rows_loaded=rows_loaded,
+                )
+            )
 
     console.print("\n", _render_summary(reports, snapshot))
 
@@ -200,16 +206,17 @@ def main(
         message = (
             f"Ingestion complete — fetched {total_fetched:,} rows, "
             f"loaded {total_loaded:,} rows into BigQuery."
-            if not dry_run else
-            f"Dry run complete — fetched {total_fetched:,} rows, "
-            f"uploaded to GCS only."
+            if not dry_run
+            else f"Dry run complete — fetched {total_fetched:,} rows, uploaded to GCS only."
         )
         console.print(Panel.fit(f"[bold green]{message}[/bold green]", border_style="green"))
     else:
-        console.print(Panel.fit(
-            "[bold red]One or more cities failed; see logs above.[/bold red]",
-            border_style="red",
-        ))
+        console.print(
+            Panel.fit(
+                "[bold red]One or more cities failed; see logs above.[/bold red]",
+                border_style="red",
+            )
+        )
 
     sys.exit(exit_code)
 

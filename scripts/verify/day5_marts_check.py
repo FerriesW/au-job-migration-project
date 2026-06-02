@@ -3,9 +3,11 @@
 Usage (PowerShell, from project root):
     uv run --env-file .env python scripts/verify/day5_marts_check.py
 """
+
 from __future__ import annotations
 
 import os
+
 from google.cloud import bigquery
 
 PROJECT = os.environ.get("GCP_PROJECT_ID", "au-jobs-radar")

@@ -7,6 +7,110 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-06-02]  v0.10.0 — GitHub Actions CI/CD pipeline and repo-wide lint/type cleanup
+------------------------------------------------------------------------------
+
+Scope of work
+  - Added two GitHub Actions workflows under .github/workflows/:
+      * ci.yml — hermetic pull-request quality gate. Runs only checks that
+        need no cloud credentials: ruff (lint + format check), mypy --strict,
+        pytest, and an offline `dbt parse`. Triggers on pull_request and push
+        to main; permissions limited to contents: read; holds zero secrets.
+      * cd.yml — scheduled warehouse build. Monthly cron (1st, 18:00 UTC) plus
+        workflow_dispatch. Authenticates to Google Cloud keylessly via OIDC /
+        Workload Identity Federation (google-github-actions/auth) and runs
+        `dbt build --target prod` against BigQuery. No long-lived service-
+        account key is stored in GitHub. Scope is deliberately dbt-build-only;
+        the ingest and LLM-extract stages (which require the Adzuna and
+        DashScope API keys) are deferred to a later increment to keep the
+        stored-secret count at zero.
+  - Added .github/dbt-ci/profiles.yml: a CI/CD-only dbt profile selected with
+    --profiles-dir. Both targets use BigQuery method `oauth` (Application
+    Default Credentials). The `ci` target defaults project/location to
+    placeholders so `dbt parse` runs with no connection or secret; the `prod`
+    target consumes ADC populated by the OIDC auth step. Local development
+    continues to use the gitignored dbt/profiles.yml.
+  - Added a unit-test suite under tests/ (the project previously had none,
+    while pyproject pointed pytest at a non-existent tests/ directory):
+      * test_storage_keys.py      — GCS object-key builder.
+      * test_extraction_schema.py — Pydantic enum-synonym normalisation and
+        conservative defaults (the v0.4.0 "fully remote" -> "remote" bug class).
+      * test_client_base_url.py   — DashScope base-URL resolution/validation
+        (the v0.4.0 malformed-URL incident). 20 pure-logic tests, no cloud.
+  - Authored docs/adr/0001-cicd-security-architecture.md recording the two
+    decisions (hermetic PR gate, keyless OIDC CD), the rejected service-
+    account-JSON-key alternative, and the consequence that the PR gate does
+    not exercise warehouse SQL.
+  - Authored docs/cicd-setup-guide.md: the one-time GCP Workload Identity
+    Federation setup (pool, OIDC provider scoped to this repository, SA
+    impersonation binding) and the four GitHub repo variables CD consumes
+    (GCP_PROJECT_ID, GCP_LOCATION, GCP_SERVICE_ACCOUNT,
+    GCP_WORKLOAD_IDENTITY_PROVIDER).
+
+Repo-wide lint and type cleanup (prerequisite for a green gate)
+  - The existing codebase did not pass its own configured ruff and
+    mypy --strict. Brought it to zero violations so the gate is honest:
+      * ruff: 16 safe autofixes (import ordering, datetime.UTC) plus three
+        verified UP042 conversions of (str, Enum) classes to StrEnum (Verdict,
+        SponsorshipSignal, RemoteFriendly). Confirmed safe: every consumer
+        reads .value or compares enum-to-enum; none relies on str(enum)
+        formatting, which StrEnum would change.
+      * ruff format applied across 13 previously-unformatted files.
+      * one B904 fixed (raise typer.Exit(...) from exc in
+        verify_adzuna_source.py).
+      * mypy --strict: 41 errors -> 0. Enabled the pydantic.mypy plugin
+        (cleared 13 false-positive BaseSettings call-arg errors in config.py);
+        annotated bare dict / Counter generics as dict[str, Any] / Counter[str];
+        tightened four Any-returning helpers; added type: ignore[attr-defined]
+        for the google.cloud.storage namespace-package import (2 sites);
+        restructured the where/cities branch in verify_adzuna_source.py to drop
+        a list[str | None] sentinel.
+  - pyproject.toml: added plugins = ["pydantic.mypy"] under [tool.mypy].
+
+Verifications passed (run locally, mirroring the ci.yml steps)
+  - ruff check .                  -> All checks passed!
+  - ruff format --check .         -> 21 files already formatted.
+  - mypy adzuna_pipeline scripts  -> Success: no issues found in 18 source files.
+  - pytest                        -> 20 passed.
+  - dbt deps                      -> dbt-utils 1.3.3 installed.
+  - dbt parse (target=ci, no .env loaded) -> manifest built with no
+    credentials, confirming the PR gate is hermetic.
+
+Known limitations
+  - The PR gate does not execute SQL against a warehouse, so BigQuery-runtime
+    or dialect errors surface only in CD (or local dbt build), not on PRs.
+    `dbt parse` catches ref/source/Jinja errors offline, not execution errors.
+  - CD will not run green until the one-time GCP WIF setup is complete and the
+    four repo variables exist (docs/cicd-setup-guide.md). Until then the
+    workflow is present but its auth step will fail.
+  - CD scope is dbt-build-only; the monthly run rebuilds models from data
+    already in raw and does not refresh from Adzuna or re-run extraction.
+
+Changes
+  Added
+    - .github/workflows/ci.yml
+    - .github/workflows/cd.yml
+    - .github/dbt-ci/profiles.yml
+    - tests/test_storage_keys.py
+    - tests/test_extraction_schema.py
+    - tests/test_client_base_url.py
+    - docs/adr/0001-cicd-security-architecture.md
+    - docs/cicd-setup-guide.md
+  Changed
+    - pyproject.toml: pydantic.mypy plugin.
+    - adzuna_pipeline/ and scripts/: ruff autofix + format, StrEnum
+      conversions, full mypy --strict annotation pass (13 files).
+  Fixed
+    - Repo no longer self-violates its ruff and mypy --strict configuration
+      (41 mypy errors -> 0; all ruff violations cleared).
+
+Correction
+  - The v0.9.0 entry below was dated 2026-05-16; the Snowflake-adapter commit
+    actually landed 2026-05-31 per git history. Date corrected in this revision.
+
+==============================================================================
+
+
 [2026-05-12]  v0.5.1 — Q1 demand proxy migrated from EOI to ANZSCO ceilings
 ------------------------------------------------------------------------------
 
@@ -256,7 +360,7 @@ Changes
 ==============================================================================
 
 
-[2026-05-16]  v0.9.0 — Snowflake adapter and multi-cloud dbt target
+[2026-05-31]  v0.9.0 — Snowflake adapter and multi-cloud dbt target
 ------------------------------------------------------------------------------
 
 Scope of work

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Final
+from typing import Any, Final
 
 SYSTEM_PROMPT: Final[str] = (
     "You extract structured signals from Australian job postings. Respond with "
@@ -57,7 +57,7 @@ SYSTEM_PROMPT: Final[str] = (
 )
 
 
-_FEW_SHOT_EXAMPLES: Final[list[dict]] = [
+_FEW_SHOT_EXAMPLES: Final[list[dict[str, Any]]] = [
     {
         "description": (
             "Senior Python Developer based in Sydney, hybrid working arrangement "
@@ -118,16 +118,22 @@ def build_messages(description: str) -> list[dict[str, str]]:
     """
     messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     for example in _FEW_SHOT_EXAMPLES:
-        messages.append({
+        messages.append(
+            {
+                "role": "user",
+                "content": f"Description:\n{example['description']}",
+            }
+        )
+        messages.append(
+            {
+                "role": "assistant",
+                "content": json.dumps(example["expected"], ensure_ascii=False),
+            }
+        )
+    messages.append(
+        {
             "role": "user",
-            "content": f"Description:\n{example['description']}",
-        })
-        messages.append({
-            "role": "assistant",
-            "content": json.dumps(example["expected"], ensure_ascii=False),
-        })
-    messages.append({
-        "role": "user",
-        "content": f"Description:\n{description}",
-    })
+            "content": f"Description:\n{description}",
+        }
+    )
     return messages

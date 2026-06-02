@@ -1,0 +1,63 @@
+name: CD (scheduled warehouse build)
+
+# Monthly rebuild of the BigQuery warehouse from data already landed in `raw`.
+# Scope is deliberately "dbt build only" (no ingestion / no LLM extraction), so
+# the ONLY credential needed is GCP — obtained keylessly via OIDC / Workload
+# Identity Federation. No long-lived secret is stored in GitHub.
+# Adding the ingest + extract stages (which require the Adzuna and DashScope
+# API keys) is a later increment. See docs/cicd-setup-guide.md for one-time
+# GCP/WIF setup, and docs/adr/0001-cicd-security-architecture.md for rationale.
+
+on:
+  schedule:
+    # 18:00 UTC on the 1st of each month (~04:00 AEST on the 2nd).
+    - cron: "0 18 1 * *"
+  workflow_dispatch: {}
+
+# id-token: write is required for the OIDC token exchange. contents: read is
+# the only repo scope needed — CD writes to BigQuery, not to the repo.
+permissions:
+  id-token: write
+  contents: read
+
+# Never let two warehouse builds overlap.
+concurrency:
+  group: cd-warehouse-build
+  cancel-in-progress: false
+
+jobs:
+  build-warehouse:
+    name: dbt build (BigQuery, OIDC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_LOCATION: ${{ vars.GCP_LOCATION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync --all-extras
+
+      # Keyless auth: mints a short-lived GCP access token from GitHub's OIDC
+      # identity and exports Application Default Credentials for dbt-bigquery
+      # (profile method: oauth). No service-account JSON key involved.
+      - name: Authenticate to Google Cloud (OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: dbt deps
+        run: uv run dbt deps --project-dir dbt
+
+      - name: dbt build (seeds + models + 51 tests, target=prod)
+        run: uv run dbt build --project-dir dbt --profiles-dir .github/dbt-ci --target prod

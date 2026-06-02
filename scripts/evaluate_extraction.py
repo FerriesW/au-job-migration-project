@@ -8,7 +8,7 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import typer
 from dotenv import load_dotenv
@@ -57,7 +57,7 @@ def _configure_logging(level: str) -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def _fetch_evaluation_set(sample_size: int, only_with_signal: bool) -> list[dict]:
+def _fetch_evaluation_set(sample_size: int, only_with_signal: bool) -> list[dict[str, Any]]:
     """Pull description + extraction pairs from BigQuery for evaluation.
 
     Args:
@@ -78,7 +78,8 @@ def _fetch_evaluation_set(sample_size: int, only_with_signal: bool) -> list[dict
         r"  r'years|experience|sponsor|visa|remote|hybrid|wfh|python|sql|"
         r"aws|gcp|azure|java|react|kubernetes|docker'"
         ")"
-        if only_with_signal else ""
+        if only_with_signal
+        else ""
     )
     query = f"""
         SELECT
@@ -99,15 +100,17 @@ def _fetch_evaluation_set(sample_size: int, only_with_signal: bool) -> list[dict
         LIMIT @sample_size
     """
     client = bigquery.Client(project=project, location=gcp.location)
-    job_config = bigquery.QueryJobConfig(query_parameters=[
-        bigquery.ScalarQueryParameter("sample_size", "INT64", sample_size),
-    ])
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("sample_size", "INT64", sample_size),
+        ]
+    )
     rows = client.query(query, job_config=job_config).result()
     return [dict(r) for r in rows]
 
 
 async def _judge_rows(
-    raw_rows: list[dict],
+    raw_rows: list[dict[str, Any]],
     *,
     concurrency: int,
 ) -> list[JudgedRow]:
@@ -118,7 +121,7 @@ async def _judge_rows(
 
 
 async def _judge_one(
-    row: dict,
+    row: dict[str, Any],
     judge: QwenJudge,
     sem: asyncio.Semaphore,
 ) -> JudgedRow:
@@ -151,9 +154,9 @@ async def _judge_one(
             )
 
 
-def _aggregate(judged: list[JudgedRow]) -> dict[str, Counter]:
+def _aggregate(judged: list[JudgedRow]) -> dict[str, Counter[str]]:
     """Tally verdicts per field across the evaluation set."""
-    tallies: dict[str, Counter] = {field: Counter() for field in JUDGED_FIELDS}
+    tallies: dict[str, Counter[str]] = {field: Counter() for field in JUDGED_FIELDS}
     for row in judged:
         if row.judgment is None:
             continue
@@ -162,7 +165,7 @@ def _aggregate(judged: list[JudgedRow]) -> dict[str, Counter]:
     return tallies
 
 
-def _render_summary(tallies: dict[str, Counter], judged: list[JudgedRow]) -> Table:
+def _render_summary(tallies: dict[str, Counter[str]], judged: list[JudgedRow]) -> Table:
     table = Table(title="Per-field judgment summary")
     table.add_column("Field", style="cyan")
     table.add_column("Correct", justify="right", style="green")
@@ -222,17 +225,19 @@ def _print_failure_examples(judged: list[JudgedRow], limit: int = 5) -> None:
         return
 
     for row, bad_fields in failures:
-        console.print(Panel.fit(
-            f"[bold]{row.job_title}[/bold]  ({row.job_id})\n"
-            f"[dim]{row.description_text[:240]}...[/dim]\n\n"
-            + "\n".join(
-                f"  [red]{field}[/red]  -> {row.extraction.model_dump().get(field)!r}\n"
-                f"      reason: {reason}"
-                for field, reason in bad_fields
-            ),
-            border_style="red",
-            title="incorrect",
-        ))
+        console.print(
+            Panel.fit(
+                f"[bold]{row.job_title}[/bold]  ({row.job_id})\n"
+                f"[dim]{row.description_text[:240]}...[/dim]\n\n"
+                + "\n".join(
+                    f"  [red]{field}[/red]  -> {row.extraction.model_dump().get(field)!r}\n"
+                    f"      reason: {reason}"
+                    for field, reason in bad_fields
+                ),
+                border_style="red",
+                title="incorrect",
+            )
+        )
 
 
 @app.command()
@@ -248,13 +253,15 @@ def main(
 ) -> None:
     """Evaluate extraction quality via an LLM judge and print a per-field report."""
     _configure_logging(log_level)
-    console.print(Panel.fit(
-        f"[bold]LLM-as-judge evaluation[/bold]\n"
-        f"sample_size=[cyan]{sample_size}[/cyan]  "
-        f"concurrency=[cyan]{concurrency}[/cyan]  "
-        f"only_with_signal=[cyan]{only_with_signal}[/cyan]",
-        border_style="blue",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]LLM-as-judge evaluation[/bold]\n"
+            f"sample_size=[cyan]{sample_size}[/cyan]  "
+            f"concurrency=[cyan]{concurrency}[/cyan]  "
+            f"only_with_signal=[cyan]{only_with_signal}[/cyan]",
+            border_style="blue",
+        )
+    )
 
     raw_rows = _fetch_evaluation_set(sample_size, only_with_signal)
     if not raw_rows:

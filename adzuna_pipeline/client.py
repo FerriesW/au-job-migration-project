@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 import httpx
 from tenacity import (
@@ -16,8 +17,6 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-
-import logging
 
 from .config import get_adzuna
 
@@ -74,7 +73,7 @@ class SearchPage:
 
     page: int
     total_count: int
-    results: list[dict]
+    results: list[dict[str, Any]]
 
 
 class AdzunaClient:
@@ -176,7 +175,7 @@ class AdzunaClient:
         query: SearchQuery,
         *,
         max_pages: int,
-    ) -> tuple[int, list[dict]]:
+    ) -> tuple[int, list[dict[str, Any]]]:
         """Drain ``iter_pages`` into the (total_count, all_results) tuple.
 
         Args:
@@ -186,7 +185,7 @@ class AdzunaClient:
         Returns:
             A pair of the API-reported total count and the aggregated rows.
         """
-        rows: list[dict] = []
+        rows: list[dict[str, Any]] = []
         total_count = 0
         for page in self.iter_pages(query, max_pages=max_pages):
             if page.page == 1:
@@ -194,7 +193,7 @@ class AdzunaClient:
             rows.extend(page.results)
         return total_count, rows
 
-    def _raw_get(self, query: SearchQuery, page: int) -> dict:
+    def _raw_get(self, query: SearchQuery, page: int) -> dict[str, Any]:
         """Execute a single GET against the search endpoint."""
         url = f"{ADZUNA_BASE_URL}/{query.country}/search/{page}"
         params: dict[str, str | int] = {
@@ -211,7 +210,8 @@ class AdzunaClient:
 
         response = self._client.get(url, params=params)
         response.raise_for_status()
-        return response.json()
+        payload: dict[str, Any] = response.json()
+        return payload
 
 
 def _retry_log(retry_state: RetryCallState) -> None:  # pragma: no cover

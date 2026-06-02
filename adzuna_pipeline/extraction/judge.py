@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from enum import Enum
+from enum import StrEnum
 from typing import Final
 
 import httpx
@@ -46,7 +46,7 @@ JUDGED_FIELDS: Final[tuple[str, ...]] = (
 )
 
 
-class Verdict(str, Enum):
+class Verdict(StrEnum):
     """Outcome of a single field judgment."""
 
     CORRECT = "correct"
@@ -218,16 +218,17 @@ class QwenJudge:
         if response.is_success:
             data = response.json()
             try:
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"]["content"]
             except (KeyError, IndexError) as exc:
                 raise ExtractionError(f"Unexpected judge response shape: {data}") from exc
+            return str(content)
 
         body_preview = response.text[:500]
-        message = (
-            f"Judge HTTP {response.status_code} from model={self._model!r}: {body_preview}"
-        )
+        message = f"Judge HTTP {response.status_code} from model={self._model!r}: {body_preview}"
         if response.status_code in {429, 500, 502, 503, 504}:
             raise httpx.HTTPStatusError(
-                message, request=response.request, response=response,
+                message,
+                request=response.request,
+                response=response,
             )
         raise ExtractionError(message)

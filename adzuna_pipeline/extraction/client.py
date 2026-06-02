@@ -20,9 +20,7 @@ from .schema import ExtractionResult
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
-DASHSCOPE_BASE_URL_DEFAULT: Final[str] = (
-    "https://dashscope.aliyuncs.com/compatible-mode/v1"
-)
+DASHSCOPE_BASE_URL_DEFAULT: Final[str] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_TIMEOUT_SECONDS: Final[float] = 30.0
 RETRY_ATTEMPTS: Final[int] = 4
 RETRY_WAIT_MAX_SECONDS: Final[float] = 20.0
@@ -133,9 +131,10 @@ class QwenExtractor:
         if response.is_success:
             data = response.json()
             try:
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"]["content"]
             except (KeyError, IndexError) as exc:
                 raise ExtractionError(f"Unexpected API response shape: {data}") from exc
+            return str(content)
 
         # Non-success: surface the response body for diagnostics. Retryable
         # transport errors (429 / 5xx) raise httpx.HTTPStatusError so tenacity's
@@ -143,11 +142,12 @@ class QwenExtractor:
         # ExtractionError with the same diagnostic body included.
         body_preview = response.text[:500]
         message = (
-            f"DashScope HTTP {response.status_code} from model={self._model!r}: "
-            f"{body_preview}"
+            f"DashScope HTTP {response.status_code} from model={self._model!r}: {body_preview}"
         )
         if response.status_code in {429, 500, 502, 503, 504}:
             raise httpx.HTTPStatusError(
-                message, request=response.request, response=response,
+                message,
+                request=response.request,
+                response=response,
             )
         raise ExtractionError(message)

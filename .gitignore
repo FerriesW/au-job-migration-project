@@ -23,7 +23,13 @@ env/
 *.key
 service-account*.json
 gcp-credentials*.json
-profiles.yml
+# Local dbt profile only (holds real creds). The committed CI/CD profile at
+# .github/dbt-ci/profiles.yml is credential-free and must stay tracked.
+dbt/profiles.yml
+
+# Personal setup guides / handbooks and the LinkedIn draft — kept local, not
+# published. ADRs (docs/adr/) stay tracked as architecture records.
+docs/*.md
 
 # dbt
 target/

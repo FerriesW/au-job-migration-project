@@ -1,0 +1,57 @@
+name: CI
+
+# Hermetic PR quality gate. Runs only checks that need no cloud credentials,
+# so a red build always means the code is wrong — never that live data drifted
+# or an API quota ran out. The live `dbt build` against BigQuery lives in
+# cd.yml, not here. See docs/adr/0001-cicd-security-architecture.md.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# No secrets, no cloud writes — read-only token is all this workflow needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Hermetic quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync --all-extras
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Type check (mypy --strict)
+        run: uv run mypy adzuna_pipeline scripts
+
+      - name: Unit tests
+        run: uv run pytest
+
+      - name: dbt deps
+        run: uv run dbt deps --project-dir dbt
+
+      - name: dbt parse (offline project validation — no warehouse)
+        run: uv run dbt parse --project-dir dbt --profiles-dir .github/dbt-ci --target ci

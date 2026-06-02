@@ -1,0 +1,37 @@
+# dbt profile used ONLY by GitHub Actions. Selected with
+# `--profiles-dir .github/dbt-ci`. Local development continues to use
+# dbt/profiles.yml (gitignored). Both targets use BigQuery method `oauth`
+# so they authenticate via Application Default Credentials — no keyfile.
+#
+#   ci   : credential-free target for `dbt parse` in the hermetic PR gate.
+#          Project/location default to placeholders so parse never needs a
+#          warehouse connection or any secret.
+#   prod : ADC-authenticated target for the scheduled CD build. The
+#          google-github-actions/auth step (OIDC / Workload Identity
+#          Federation) populates ADC before dbt runs; no JSON key exists.
+#
+# Schema routing (raw / staging / marts) is handled by the
+# generate_schema_name macro plus +schema configs in dbt_project.yml, so the
+# default `dataset` here is only the fallback schema.
+
+au_jobs_radar:
+  target: ci
+  outputs:
+    ci:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'ci-placeholder-project') }}"
+      dataset: staging
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
+      threads: 4
+
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: marts
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
+      threads: 4
+      timeout_seconds: 600
+      priority: batch
+      job_retries: 2

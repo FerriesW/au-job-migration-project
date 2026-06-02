@@ -61,14 +61,16 @@ def main(
     processor = ExtractionBatchProcessor()
     processor.ensure_table()
 
-    console.print(Panel.fit(
-        f"[bold]LLM extraction[/bold]\n"
-        f"sample_size=[cyan]{sample_size or 'all pending'}[/cyan]  "
-        f"concurrency=[cyan]{concurrency}[/cyan]  "
-        f"snapshot_date=[cyan]{snap.isoformat() if snap else 'any'}[/cyan]  "
-        f"dry_run=[cyan]{dry_run}[/cyan]",
-        border_style="blue",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]LLM extraction[/bold]\n"
+            f"sample_size=[cyan]{sample_size or 'all pending'}[/cyan]  "
+            f"concurrency=[cyan]{concurrency}[/cyan]  "
+            f"snapshot_date=[cyan]{snap.isoformat() if snap else 'any'}[/cyan]  "
+            f"dry_run=[cyan]{dry_run}[/cyan]",
+            border_style="blue",
+        )
+    )
 
     pending = processor.fetch_pending(snapshot_date=snap, sample_size=sample_size)
     console.print(f"[bold]Pending jobs:[/bold] {len(pending):,}")

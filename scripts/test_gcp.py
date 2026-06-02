@@ -77,7 +77,7 @@ def _check_bigquery(project_id: str) -> bool:
 
 def _check_gcs(project_id: str, bucket_name: str) -> bool:
     """Validate object-level GCS access via a write/read/delete round-trip."""
-    from google.cloud import storage
+    from google.cloud import storage  # type: ignore[attr-defined]
 
     try:
         client = storage.Client(project=project_id)
@@ -88,9 +88,7 @@ def _check_gcs(project_id: str, bucket_name: str) -> bool:
         if blob.download_as_text() != payload:
             raise RuntimeError("GCS round-trip payload mismatch.")
         blob.delete()
-        console.print(
-            f"[green]GCS round-trip OK:[/green] gs://{bucket_name}/{SMOKE_BLOB_KEY}"
-        )
+        console.print(f"[green]GCS round-trip OK:[/green] gs://{bucket_name}/{SMOKE_BLOB_KEY}")
         return True
     except Exception as exc:
         console.print(f"[red]GCS FAILED:[/red] {exc}")
@@ -122,10 +120,12 @@ def main() -> int:
     if not _check_gcs(env["GCP_PROJECT_ID"], env["GCS_BUCKET_RAW"]):
         return 1
 
-    console.print(Panel.fit(
-        "[bold green]All GCP smoke tests passed.[/bold green]",
-        border_style="green",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold green]All GCP smoke tests passed.[/bold green]",
+            border_style="green",
+        )
+    )
     return 0
 
 
