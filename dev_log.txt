@@ -7,7 +7,46 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
-[2026-06-02]  v0.10.0 — GitHub Actions CI/CD pipeline and repo-wide lint/type cleanup
+[2026-06-17]  v0.10.1 — Fix seed/staging build ordering exposed by CD
+------------------------------------------------------------------------------
+
+Scope of work
+  - stg_occupation_lists and stg_eoi referenced their seed tables through
+    source('raw', ...) rather than ref(), leaving no DAG edge from the
+    occupation_lists / eoi_invitations seeds to those staging views and their
+    tests. dbt build therefore ran the views and tests concurrently with the
+    seed reload; on the cold, parallel CD runner the not_null /
+    accepted_values tests queried raw.occupation_lists mid-reload and failed
+    with "Table ... was not found". (Local builds never hit it because the
+    seed tables already existed and timing differed.)
+  - Switched both staging models to ref('occupation_lists') /
+    ref('eoi_invitations') and removed those two entries from
+    staging/sources.yml (they are seeds, not external sources; adzuna_jobs
+    remains a source). This matches the existing ref() usage for
+    anzsco_title_patterns and occupation_ceilings, and also unblocks the
+    Snowflake build, which starts from empty schemas.
+
+Verifications passed
+  - dbt ls --select occupation_lists+ now lists stg_occupation_lists,
+    dim_occupation, and their tests as downstream of the seed.
+  - CD workflow (GitHub Actions, OIDC -> BigQuery) re-run green: dbt build
+    materialised all models and passed all 51 tests against target=prod.
+
+Changes
+  Changed
+    - dbt/models/staging/stg_occupation_lists.sql: source() -> ref().
+    - dbt/models/staging/stg_eoi.sql: source() -> ref().
+    - dbt/models/staging/sources.yml: dropped occupation_lists and
+      eoi_invitations (seeds, not sources).
+
+Correction
+  - The v0.10.0 entry below was first dated 2026-06-02 in error; the CI/CD
+    work and this fix both landed 2026-06-17 per git history. Date corrected.
+
+==============================================================================
+
+
+[2026-06-17]  v0.10.0 — GitHub Actions CI/CD pipeline and repo-wide lint/type cleanup
 ------------------------------------------------------------------------------
 
 Scope of work
