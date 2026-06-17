@@ -6,7 +6,7 @@
 
 with source_data as (
 
-    select * from {{ source('raw', 'eoi_invitations') }}
+    select * from {{ ref('eoi_invitations') }}
 
 ),
 

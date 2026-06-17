@@ -7,7 +7,3 @@ sources:
     tables:
       - name: adzuna_jobs
         description: "Adzuna API job postings, one row per posting per snapshot."
-      - name: occupation_lists
-        description: "Department of Home Affairs MLTSSL / STSOL / CSOL occupation lists."
-      - name: eoi_invitations
-        description: "Department of Home Affairs EOI invitation rounds."

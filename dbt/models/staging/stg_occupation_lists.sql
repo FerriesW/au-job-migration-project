@@ -6,7 +6,7 @@
 
 with source_data as (
 
-    select * from {{ source('raw', 'occupation_lists') }}
+    select * from {{ ref('occupation_lists') }}
 
 ),
 
