@@ -45,6 +45,17 @@ class DashScopeSettings(_BaseSettings):
     model: str = Field("qwen-turbo", alias="QWEN_MODEL")
 
 
+class SnowflakeSettings(_BaseSettings):
+    """Snowflake connection settings for the cross-warehouse (Theme B) sync."""
+
+    account: str = Field(..., alias="SNOWFLAKE_ACCOUNT")
+    user: str = Field(..., alias="SNOWFLAKE_USER")
+    password: str = Field(..., alias="SNOWFLAKE_PASSWORD")
+    role: str = Field("DBT_ROLE", alias="SNOWFLAKE_ROLE")
+    warehouse: str = Field("COMPUTE_WH", alias="SNOWFLAKE_WAREHOUSE")
+    database: str = Field("AU_JOBS_RADAR", alias="SNOWFLAKE_DATABASE")
+
+
 class RuntimeSettings(_BaseSettings):
     """Runtime knobs shared across pipeline components."""
 
@@ -68,6 +79,12 @@ def get_gcp() -> GcpSettings:
 def get_dashscope() -> DashScopeSettings:
     """Return cached DashScope settings."""
     return DashScopeSettings()
+
+
+@lru_cache(maxsize=1)
+def get_snowflake() -> SnowflakeSettings:
+    """Return cached Snowflake settings."""
+    return SnowflakeSettings()
 
 
 @lru_cache(maxsize=1)
