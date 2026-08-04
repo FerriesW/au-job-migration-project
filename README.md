@@ -202,8 +202,10 @@ Step-by-step setup guides for each layer live in `docs/`:
 │   ├── seeds/               # anzsco_title_patterns, occupation_ceilings, ...
 │   ├── macros/
 │   └── tests/               # custom singular tests
-├── scripts/                 # Typer CLIs (verify, ingest, extract, evaluate)
-├── docs/                    # setup and polish guides + theme JSON
+├── scripts/                 # Typer CLIs (verify, ingest, extract, evaluate, sync)
+├── tests/                   # pure-logic unit tests, run by the CI gate
+├── .github/                 # CI (hermetic PR gate) + CD (keyless OIDC build)
+├── docs/adr/                # architecture decision records
 ├── screenshots/             # dashboard exports for README and LinkedIn
 ├── pyproject.toml           # uv-managed Python deps
 ├── .env.example             # env-var template

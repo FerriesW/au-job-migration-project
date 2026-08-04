@@ -27,9 +27,19 @@ gcp-credentials*.json
 # .github/dbt-ci/profiles.yml is credential-free and must stay tracked.
 dbt/profiles.yml
 
-# Personal setup guides / handbooks and the LinkedIn draft — kept local, not
-# published. ADRs (docs/adr/) stay tracked as architecture records.
-docs/*.md
+# Personal working documents — kept local, not published. Listed by name
+# rather than as docs/*.md, so that a new public document placed under docs/
+# shows up in `git status` instead of being silently ignored. ADRs
+# (docs/adr/) are tracked as architecture records.
+docs/cicd-setup-guide.md
+docs/gcp-setup-guide.md
+docs/snowflake-setup-guide.md
+docs/powerbi-setup-guide.md
+docs/powerbi-dashboard-guide.md
+docs/powerbi-polish-guide.md
+docs/linkedin-article-draft.md
+migration-job-dashboard-plan.md
+HANDOFF.md
 
 # dbt
 target/
@@ -61,5 +71,3 @@ Thumbs.db
 # Build artefacts
 dist/
 build/
-
-migration-job-dashboard-plan.md
