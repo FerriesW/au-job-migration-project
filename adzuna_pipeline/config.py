@@ -31,7 +31,7 @@ class GcpSettings(_BaseSettings):
 
     credentials_path: str = Field(..., alias="GOOGLE_APPLICATION_CREDENTIALS")
     project_id: str = Field(..., alias="GCP_PROJECT_ID")
-    location: str = Field("australia-southeast1", alias="GCP_LOCATION")
+    location: str = Field("australia-southeast2", alias="GCP_LOCATION")
     bucket_raw: str = Field(..., alias="GCS_BUCKET_RAW")
     dataset_raw: str = Field("raw", alias="BQ_DATASET_RAW")
     dataset_staging: str = Field("staging", alias="BQ_DATASET_STAGING")

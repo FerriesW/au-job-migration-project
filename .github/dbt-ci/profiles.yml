@@ -22,7 +22,7 @@ au_jobs_radar:
       method: oauth
       project: "{{ env_var('GCP_PROJECT_ID', 'ci-placeholder-project') }}"
       dataset: staging
-      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast2') }}"
       threads: 4
 
     prod:
@@ -30,7 +30,7 @@ au_jobs_radar:
       method: oauth
       project: "{{ env_var('GCP_PROJECT_ID') }}"
       dataset: marts
-      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast2') }}"
       threads: 4
       timeout_seconds: 600
       priority: batch

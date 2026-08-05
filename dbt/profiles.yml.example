@@ -7,7 +7,7 @@ au_jobs_radar:
       project:  "{{ env_var('GCP_PROJECT_ID') }}"
       dataset:  staging
       keyfile:  "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
-      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast2') }}"
       threads: 4
       timeout_seconds: 300
       priority: interactive
@@ -20,7 +20,7 @@ au_jobs_radar:
       project:  "{{ env_var('GCP_PROJECT_ID') }}"
       dataset:  marts
       keyfile:  "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
-      location: "{{ env_var('GCP_LOCATION', 'australia-southeast1') }}"
+      location: "{{ env_var('GCP_LOCATION', 'australia-southeast2') }}"
       threads: 4
       timeout_seconds: 300
       priority: batch
