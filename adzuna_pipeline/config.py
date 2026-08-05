@@ -56,6 +56,19 @@ class SnowflakeSettings(_BaseSettings):
     database: str = Field("AU_JOBS_RADAR", alias="SNOWFLAKE_DATABASE")
 
 
+class AwsSettings(_BaseSettings):
+    """AWS region and S3 landing-zone bucket for the multi-cloud track.
+
+    Credentials are deliberately absent: boto3 resolves them through its own
+    chain (environment variables, shared credentials file, SSO, or an assumed
+    role), so the same code runs locally against an IAM user and in CI against
+    a keyless OIDC role without changing.
+    """
+
+    region: str = Field("ap-southeast-2", alias="AWS_REGION")
+    bucket_raw: str = Field(..., alias="S3_BUCKET_RAW")
+
+
 class RuntimeSettings(_BaseSettings):
     """Runtime knobs shared across pipeline components."""
 
@@ -85,6 +98,12 @@ def get_dashscope() -> DashScopeSettings:
 def get_snowflake() -> SnowflakeSettings:
     """Return cached Snowflake settings."""
     return SnowflakeSettings()
+
+
+@lru_cache(maxsize=1)
+def get_aws() -> AwsSettings:
+    """Return cached AWS settings."""
+    return AwsSettings()
 
 
 @lru_cache(maxsize=1)

@@ -1,4 +1,4 @@
-"""End-to-end Adzuna ingestion orchestrator: API -> GCS -> BigQuery."""
+"""End-to-end Adzuna ingestion orchestrator: API -> GCS + S3 -> BigQuery."""
 
 from __future__ import annotations
 
@@ -19,13 +19,21 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Module imports must follow load_dotenv so config classes pick up env values.
+from botocore.exceptions import BotoCoreError, ClientError  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
+
 from adzuna_pipeline.client import (  # noqa: E402
     AdzunaApiError,
     AdzunaClient,
     SearchQuery,
 )
 from adzuna_pipeline.loader import BigQueryRawLoader  # noqa: E402
-from adzuna_pipeline.storage import GcsRawUploader, UploadResult  # noqa: E402
+from adzuna_pipeline.storage import (  # noqa: E402
+    GcsRawUploader,
+    S3RawUploader,
+    UploadResult,
+    build_payload,
+)
 
 DEFAULT_CITIES: Final[tuple[str, ...]] = ("Melbourne", "Sydney", "Brisbane")
 DEFAULT_CATEGORY: Final[str] = "it-jobs"
@@ -43,8 +51,10 @@ class CityIngestReport:
     city: str
     total_count: int
     fetched_rows: int
-    upload: UploadResult | None
-    rows_loaded: int
+    rows_loaded: int = 0
+    gcs_upload: UploadResult | None = None
+    s3_upload: UploadResult | None = None
+    s3_error: str | None = None
 
 
 def _configure_logging(level: str) -> None:
@@ -72,20 +82,56 @@ def _parse_snapshot_date(value: str | None) -> date:
     return date.fromisoformat(value)
 
 
+def _build_s3_uploader() -> S3RawUploader | None:
+    """Construct the S3 uploader, or return None if AWS is not configured.
+
+    A missing S3_BUCKET_RAW is treated as "this machine only has GCP set up"
+    rather than an error, so the GCP path stays runnable for anyone who has
+    not provisioned the AWS side.
+    """
+    try:
+        return S3RawUploader()
+    except (BotoCoreError, ClientError, ValidationError) as exc:
+        console.print(f"[yellow]S3 mirror disabled — AWS not configured:[/yellow] {exc}")
+        return None
+
+
 def _render_summary(reports: list[CityIngestReport], snapshot: date) -> Table:
+    """Render the per-city summary.
+
+    Both landing zones write the same object key, so the key is shown once and
+    each cloud gets its own status column instead of a second long URI.
+    """
     table = Table(title=f"Ingestion summary | snapshot_date={snapshot.isoformat()}")
     table.add_column("City", style="cyan")
     table.add_column("Adzuna total", justify="right")
     table.add_column("Fetched", justify="right")
-    table.add_column("GCS object", overflow="fold")
+    table.add_column("Object key", overflow="fold")
+    table.add_column("GCS", justify="center")
+    table.add_column("S3", justify="center")
     table.add_column("BQ rows loaded", justify="right", style="magenta")
     for report in reports:
-        gcs_uri = report.upload.gcs_uri if report.upload else "(skipped)"
+        if report.gcs_upload is None:
+            object_key = "—"
+            gcs_status = "—"
+        else:
+            object_key = report.gcs_upload.uri.split("/", 3)[-1]
+            gcs_status = "[green]ok[/green]"
+
+        if report.s3_error is not None:
+            s3_status = "[red]FAILED[/red]"
+        elif report.s3_upload is not None:
+            s3_status = "[green]ok[/green]"
+        else:
+            s3_status = "—"
+
         table.add_row(
             report.city,
             f"{report.total_count:,}",
             f"{report.fetched_rows:,}",
-            gcs_uri,
+            object_key,
+            gcs_status,
+            s3_status,
             f"{report.rows_loaded:,}",
         )
     return table
@@ -108,16 +154,29 @@ def main(
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
-        help="Fetch and upload to GCS but skip the BigQuery load step.",
+        help="Fetch and land in both object stores but skip the BigQuery load step.",
     ),
     replace_partition: bool = typer.Option(
         False,
         "--replace-partition",
         help="Delete the snapshot_date partition before loading to ensure idempotency.",
     ),
+    skip_s3: bool = typer.Option(
+        False,
+        "--skip-s3",
+        help="Write only the GCS landing zone. The S3 mirror is left untouched.",
+    ),
     log_level: str = typer.Option("INFO", help="Logging level."),
 ) -> None:
-    """Run the Adzuna -> GCS -> BigQuery ingestion for one snapshot date."""
+    """Run the Adzuna ingestion for one snapshot date.
+
+    Each snapshot is serialised once and written to both landing zones — GCS
+    and S3 — before BigQuery loads it from GCS. S3 is the secondary target:
+    a failure there is reported and reflected in the exit code, but never
+    interrupts the GCP path that Power BI and the scheduled dbt build depend
+    on. Re-running ingest for the same snapshot date repairs a missed mirror,
+    because every upload overwrites its key.
+    """
     _configure_logging(log_level)
     target_cities = _parse_cities(cities)
     if not target_cities:
@@ -138,7 +197,8 @@ def main(
         )
     )
 
-    uploader = GcsRawUploader()
+    gcs_uploader = GcsRawUploader()
+    s3_uploader = None if skip_s3 else _build_s3_uploader()
     loader: BigQueryRawLoader | None = None
     if not dry_run:
         loader = BigQueryRawLoader()
@@ -147,7 +207,7 @@ def main(
             loader.delete_partition(snapshot.isoformat())
 
     reports: list[CityIngestReport] = []
-    exit_code = 0
+    fetch_failures: list[str] = []
 
     with AdzunaClient() as client:
         for city in target_cities:
@@ -163,25 +223,37 @@ def main(
                 total_count, rows = client.collect(query, max_pages=max_pages)
             except AdzunaApiError as exc:
                 console.print(f"[red]Adzuna fetch failed for {city}:[/red] {exc}")
-                exit_code = 1
-                reports.append(CityIngestReport(city, 0, 0, None, 0))
+                fetch_failures.append(city)
+                reports.append(CityIngestReport(city, 0, 0))
                 continue
             console.print(f"  fetched {len(rows):,} rows  (Adzuna total {total_count:,})")
 
             if not rows:
-                reports.append(CityIngestReport(city, total_count, 0, None, 0))
+                reports.append(CityIngestReport(city, total_count, 0))
                 continue
 
-            upload = uploader.upload_jsonl(
-                rows,
-                snapshot_date=snapshot,
-                partition_label=city,
-            )
-            console.print(f"  uploaded -> {upload.gcs_uri}  ({upload.size_bytes:,} bytes)")
+            # Serialise once so both landing zones receive identical bytes;
+            # re-serialising per cloud would stamp a different ingested_at.
+            payload = build_payload(rows, snapshot_date=snapshot, partition_label=city)
+
+            gcs_upload = gcs_uploader.upload(payload)
+            console.print(f"  uploaded -> {gcs_upload.uri}  ({gcs_upload.size_bytes:,} bytes)")
+
+            s3_upload: UploadResult | None = None
+            s3_error: str | None = None
+            if s3_uploader is not None:
+                try:
+                    s3_upload = s3_uploader.upload(payload)
+                    console.print(f"  mirrored -> {s3_upload.uri}")
+                except (BotoCoreError, ClientError) as exc:
+                    # Deliberately non-fatal: the GCP path feeds Power BI and the
+                    # scheduled dbt build, and must not stop because the mirror failed.
+                    s3_error = str(exc)
+                    console.print(f"  [yellow]S3 mirror failed:[/yellow] {exc}")
 
             rows_loaded = 0
             if loader is not None:
-                load_result = loader.load_from_gcs(upload.gcs_uri)
+                load_result = loader.load_from_gcs(gcs_upload.uri)
                 rows_loaded = load_result.rows_loaded
                 console.print(
                     f"  loaded {rows_loaded:,} rows into {load_result.table_id}  "
@@ -193,32 +265,48 @@ def main(
                     city=city,
                     total_count=total_count,
                     fetched_rows=len(rows),
-                    upload=upload,
                     rows_loaded=rows_loaded,
+                    gcs_upload=gcs_upload,
+                    s3_upload=s3_upload,
+                    s3_error=s3_error,
                 )
             )
 
     console.print("\n", _render_summary(reports, snapshot))
 
-    if exit_code == 0:
-        total_loaded = sum(r.rows_loaded for r in reports)
-        total_fetched = sum(r.fetched_rows for r in reports)
-        message = (
-            f"Ingestion complete — fetched {total_fetched:,} rows, "
-            f"loaded {total_loaded:,} rows into BigQuery."
-            if not dry_run
-            else f"Dry run complete — fetched {total_fetched:,} rows, uploaded to GCS only."
-        )
-        console.print(Panel.fit(f"[bold green]{message}[/bold green]", border_style="green"))
-    else:
+    mirror_failures = [r.city for r in reports if r.s3_error is not None]
+
+    if fetch_failures:
         console.print(
             Panel.fit(
-                "[bold red]One or more cities failed; see logs above.[/bold red]",
+                f"[bold red]Adzuna fetch failed for {', '.join(fetch_failures)}; "
+                f"see logs above.[/bold red]",
                 border_style="red",
             )
         )
+    elif mirror_failures:
+        # The GCP path completed. Only the S3 mirror is behind, and re-running
+        # ingest for this snapshot date overwrites and repairs it.
+        console.print(
+            Panel.fit(
+                f"[bold yellow]GCP path complete; S3 mirror missing for "
+                f"{', '.join(mirror_failures)}. Re-run to repair.[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+    else:
+        total_loaded = sum(r.rows_loaded for r in reports)
+        total_fetched = sum(r.fetched_rows for r in reports)
+        landed = "GCS only" if s3_uploader is None else "GCS and S3"
+        message = (
+            f"Ingestion complete — fetched {total_fetched:,} rows, landed in {landed}, "
+            f"loaded {total_loaded:,} rows into BigQuery."
+            if not dry_run
+            else f"Dry run complete — fetched {total_fetched:,} rows, landed in {landed}."
+        )
+        console.print(Panel.fit(f"[bold green]{message}[/bold green]", border_style="green"))
 
-    sys.exit(exit_code)
+    sys.exit(1 if fetch_failures or mirror_failures else 0)
 
 
 if __name__ == "__main__":

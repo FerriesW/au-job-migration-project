@@ -223,6 +223,7 @@ name = "au-job-radar"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "boto3" },
     { name = "dashscope" },
     { name = "db-dtypes" },
     { name = "google-auth" },
@@ -257,6 +258,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.35.0" },
     { name = "dashscope", specifier = ">=1.20.0" },
     { name = "db-dtypes", specifier = ">=1.2.0" },
     { name = "dbt-bigquery", marker = "extra == 'dbt'", specifier = ">=1.8.0" },

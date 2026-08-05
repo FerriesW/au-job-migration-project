@@ -1,4 +1,11 @@
-"""Cloud Storage utilities for landing raw Adzuna payloads as JSONL."""
+"""Object-storage utilities for landing raw Adzuna payloads as JSONL.
+
+The pipeline writes each snapshot to two landing zones — Google Cloud Storage
+and Amazon S3 — that are byte-for-byte mirrors of each other. To make that
+guarantee structural rather than incidental, a snapshot is serialised exactly
+once into a :class:`RawPayload`, and both uploaders write those same bytes
+under the key the payload derives for itself.
+"""
 
 from __future__ import annotations
 
@@ -8,35 +15,17 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
+import boto3
 from google.cloud import storage  # type: ignore[attr-defined]
 
-from .config import get_gcp
+from .config import get_aws, get_gcp
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 DATASET_PREFIX: Final[str] = "adzuna"
 PARTITION_KEY: Final[str] = "snapshot_date"
-
-
-@dataclass(frozen=True)
-class UploadResult:
-    """Outcome of a single GCS upload.
-
-    Attributes:
-        gcs_uri: Fully qualified destination URI in the form ``gs://bucket/key``.
-        row_count: Number of records written to the object.
-        size_bytes: Size of the gzipped payload in bytes.
-        snapshot_date: Logical partition date.
-        partition_label: Free-form label describing the upload subset (typically the city).
-    """
-
-    gcs_uri: str
-    row_count: int
-    size_bytes: int
-    snapshot_date: date
-    partition_label: str
 
 
 def build_blob_key(
@@ -45,17 +34,135 @@ def build_blob_key(
     partition_label: str,
     extension: str = "jsonl.gz",
 ) -> str:
-    """Construct the canonical GCS object key for an Adzuna snapshot."""
+    """Construct the canonical object key for an Adzuna snapshot.
+
+    The ``snapshot_date=`` segment is Hive-style partitioning, which is what
+    Glue/Athena partition discovery and Snowflake staged-path pruning both
+    expect. The same key is used in every landing zone.
+    """
     safe_label = partition_label.lower().replace(" ", "-")
     return f"{DATASET_PREFIX}/{PARTITION_KEY}={snapshot_date.isoformat()}/{safe_label}.{extension}"
 
 
-class GcsRawUploader:
-    """Upload Adzuna payloads to the raw landing bucket as gzipped JSONL.
+@dataclass(frozen=True)
+class RawPayload:
+    """One serialised snapshot, ready to be written to any landing zone.
 
-    Each upload represents one (snapshot_date, partition_label) tuple; the
-    object overwrites any prior payload for that key, which makes re-runs of
-    the same snapshot date idempotent.
+    Attributes:
+        data: Gzipped JSONL bytes.
+        row_count: Number of records the payload contains.
+        snapshot_date: Logical partition date.
+        partition_label: Free-form label describing the subset (typically the city).
+    """
+
+    data: bytes
+    row_count: int
+    snapshot_date: date
+    partition_label: str
+
+    @property
+    def blob_key(self) -> str:
+        """Return the object key this payload belongs under."""
+        return build_blob_key(
+            snapshot_date=self.snapshot_date,
+            partition_label=self.partition_label,
+        )
+
+    @property
+    def size_bytes(self) -> int:
+        """Return the size of the gzipped payload."""
+        return len(self.data)
+
+
+@dataclass(frozen=True)
+class UploadResult:
+    """Outcome of writing a payload to one landing zone.
+
+    Attributes:
+        uri: Fully qualified destination URI (``gs://bucket/key`` or ``s3://bucket/key``).
+        row_count: Number of records written to the object.
+        size_bytes: Size of the gzipped payload in bytes.
+        snapshot_date: Logical partition date.
+        partition_label: Free-form label describing the upload subset.
+    """
+
+    uri: str
+    row_count: int
+    size_bytes: int
+    snapshot_date: date
+    partition_label: str
+
+
+def build_payload(
+    rows: Iterable[dict[str, Any]],
+    *,
+    snapshot_date: date,
+    partition_label: str,
+    decorate_with_metadata: bool = True,
+) -> RawPayload:
+    """Serialise ``rows`` as gzipped JSONL exactly once.
+
+    Args:
+        rows: Iterable of records to write. Each record is JSON-serialised.
+        snapshot_date: Logical partition date for this batch.
+        partition_label: Subset identifier (typically the city name).
+        decorate_with_metadata: When True, augment each record with
+            ``snapshot_date``, ``ingested_at``, and ``source_city`` fields so
+            they survive into the warehouse without joins.
+
+    Returns:
+        A ``RawPayload`` holding the compressed bytes and their row count.
+    """
+    ingested_at = datetime.now(tz=UTC).isoformat()
+    snapshot_iso = snapshot_date.isoformat()
+
+    line_count = 0
+    buffer = bytearray()
+    with gzip.GzipFile(fileobj=_BytearrayWriter(buffer), mode="wb") as gzfile:
+        for record in rows:
+            if decorate_with_metadata:
+                enriched = {
+                    **record,
+                    "snapshot_date": snapshot_iso,
+                    "ingested_at": ingested_at,
+                    "source_city": partition_label,
+                }
+            else:
+                enriched = record
+            gzfile.write(json.dumps(enriched, ensure_ascii=False).encode("utf-8"))
+            gzfile.write(b"\n")
+            line_count += 1
+
+    return RawPayload(
+        data=bytes(buffer),
+        row_count=line_count,
+        snapshot_date=snapshot_date,
+        partition_label=partition_label,
+    )
+
+
+class RawUploader(Protocol):
+    """Contract shared by the per-cloud landing-zone uploaders.
+
+    Implementations differ only in which object store they target; the key and
+    the bytes come from the payload, so the two landing zones cannot drift.
+    """
+
+    @property
+    def bucket_name(self) -> str:
+        """Return the configured bucket name."""
+        ...
+
+    def upload(self, payload: RawPayload) -> UploadResult:
+        """Write ``payload`` to this landing zone, overwriting any prior object."""
+        ...
+
+
+class GcsRawUploader:
+    """Write payloads to the Google Cloud Storage raw landing bucket.
+
+    Each upload overwrites any prior object for the same key, which makes
+    re-runs of the same snapshot date idempotent.
     """
 
     def __init__(
@@ -75,70 +182,68 @@ class GcsRawUploader:
         """Return the configured bucket name."""
         return self._bucket_name
 
-    def upload_jsonl(
-        self,
-        rows: Iterable[dict[str, Any]],
-        *,
-        snapshot_date: date,
-        partition_label: str,
-        decorate_with_metadata: bool = True,
-    ) -> UploadResult:
-        """Serialise ``rows`` as gzipped JSONL and upload them.
-
-        Args:
-            rows: Iterable of records to write. Each record is JSON-serialised.
-            snapshot_date: Logical partition date for this batch.
-            partition_label: Subset identifier (typically the city name).
-            decorate_with_metadata: When True, augment each record with
-                ``snapshot_date``, ``ingested_at``, and ``source_city``
-                fields so they survive into BigQuery without joins.
-
-        Returns:
-            An ``UploadResult`` describing the destination URI and payload size.
-        """
-        blob_key = build_blob_key(
-            snapshot_date=snapshot_date,
-            partition_label=partition_label,
-        )
-        blob = self._bucket.blob(blob_key)
-
-        ingested_at = datetime.now(tz=UTC).isoformat()
-        snapshot_iso = snapshot_date.isoformat()
-
-        line_count = 0
-        buffer = bytearray()
-        with gzip.GzipFile(fileobj=_BytearrayWriter(buffer), mode="wb") as gzfile:
-            for record in rows:
-                if decorate_with_metadata:
-                    enriched = {
-                        **record,
-                        "snapshot_date": snapshot_iso,
-                        "ingested_at": ingested_at,
-                        "source_city": partition_label,
-                    }
-                else:
-                    enriched = record
-                gzfile.write(json.dumps(enriched, ensure_ascii=False).encode("utf-8"))
-                gzfile.write(b"\n")
-                line_count += 1
-
+    def upload(self, payload: RawPayload) -> UploadResult:
+        """Write ``payload`` to GCS and return the destination URI."""
+        blob = self._bucket.blob(payload.blob_key)
         blob.cache_control = "no-cache"
         blob.content_encoding = "gzip"
-        blob.upload_from_string(bytes(buffer), content_type="application/x-ndjson")
+        blob.upload_from_string(payload.data, content_type="application/x-ndjson")
 
-        gcs_uri = f"gs://{self._bucket_name}/{blob_key}"
-        LOGGER.info(
-            "Uploaded %s rows (%s bytes) to %s",
-            line_count,
-            len(buffer),
-            gcs_uri,
-        )
+        uri = f"gs://{self._bucket_name}/{payload.blob_key}"
+        LOGGER.info("Uploaded %s rows (%s bytes) to %s", payload.row_count, payload.size_bytes, uri)
         return UploadResult(
-            gcs_uri=gcs_uri,
-            row_count=line_count,
-            size_bytes=len(buffer),
-            snapshot_date=snapshot_date,
-            partition_label=partition_label,
+            uri=uri,
+            row_count=payload.row_count,
+            size_bytes=payload.size_bytes,
+            snapshot_date=payload.snapshot_date,
+            partition_label=payload.partition_label,
+        )
+
+
+class S3RawUploader:
+    """Write payloads to the Amazon S3 raw landing bucket.
+
+    Credentials come from boto3's own resolution chain, so the same code runs
+    locally against an IAM user's access key and in CI against a keyless OIDC
+    role. As with GCS, writing the same key twice overwrites, keeping re-runs
+    idempotent.
+    """
+
+    def __init__(
+        self,
+        *,
+        bucket_name: str | None = None,
+        region: str | None = None,
+    ) -> None:
+        settings = get_aws()
+        self._bucket_name: str = bucket_name or settings.bucket_raw
+        self._region: str = region or settings.region
+        self._client: Any = boto3.client("s3", region_name=self._region)
+
+    @property
+    def bucket_name(self) -> str:
+        """Return the configured bucket name."""
+        return self._bucket_name
+
+    def upload(self, payload: RawPayload) -> UploadResult:
+        """Write ``payload`` to S3 and return the destination URI."""
+        self._client.put_object(
+            Bucket=self._bucket_name,
+            Key=payload.blob_key,
+            Body=payload.data,
+            ContentType="application/x-ndjson",
+            ContentEncoding="gzip",
+            CacheControl="no-cache",
+        )
+
+        uri = f"s3://{self._bucket_name}/{payload.blob_key}"
+        LOGGER.info("Uploaded %s rows (%s bytes) to %s", payload.row_count, payload.size_bytes, uri)
+        return UploadResult(
+            uri=uri,
+            row_count=payload.row_count,
+            size_bytes=payload.size_bytes,
+            snapshot_date=payload.snapshot_date,
+            partition_label=payload.partition_label,
         )
 
 
