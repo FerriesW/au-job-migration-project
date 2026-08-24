@@ -41,6 +41,13 @@ docs/linkedin-article-draft.md
 migration-job-dashboard-plan.md
 HANDOFF.md
 
+# Scratch text files, including the prepared commit messages under
+# commit-msgs/. dev_log.txt is the project changelog and stays tracked, so it
+# is exempted explicitly — a bare `*.txt` would not untrack it (gitignore only
+# affects untracked files) but the exemption states the intent.
+*.txt
+!dev_log.txt
+
 # dbt
 target/
 dbt_packages/
