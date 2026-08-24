@@ -25,6 +25,7 @@ from .config import get_aws, get_gcp
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 DATASET_PREFIX: Final[str] = "adzuna"
+EXTRACT_PREFIX: Final[str] = "adzuna_llm_extract"
 PARTITION_KEY: Final[str] = "snapshot_date"
 
 
@@ -32,16 +33,22 @@ def build_blob_key(
     *,
     snapshot_date: date,
     partition_label: str,
+    dataset_prefix: str = DATASET_PREFIX,
     extension: str = "jsonl.gz",
 ) -> str:
-    """Construct the canonical object key for an Adzuna snapshot.
+    """Construct the canonical object key for one landing-zone object.
 
     The ``snapshot_date=`` segment is Hive-style partitioning, which is what
     Glue/Athena partition discovery and Snowflake staged-path pruning both
     expect. The same key is used in every landing zone.
+
+    ``dataset_prefix`` selects the dataset: raw Adzuna snapshots under
+    ``adzuna/``, LLM extraction results under ``adzuna_llm_extract/``. Keeping
+    them in sibling prefixes lets each be catalogued as its own table while a
+    single stage or crawler root still covers both.
     """
     safe_label = partition_label.lower().replace(" ", "-")
-    return f"{DATASET_PREFIX}/{PARTITION_KEY}={snapshot_date.isoformat()}/{safe_label}.{extension}"
+    return f"{dataset_prefix}/{PARTITION_KEY}={snapshot_date.isoformat()}/{safe_label}.{extension}"
 
 
 @dataclass(frozen=True)
@@ -53,12 +60,14 @@ class RawPayload:
         row_count: Number of records the payload contains.
         snapshot_date: Logical partition date.
         partition_label: Free-form label describing the subset (typically the city).
+        dataset_prefix: Top-level key prefix selecting the dataset.
     """
 
     data: bytes
     row_count: int
     snapshot_date: date
     partition_label: str
+    dataset_prefix: str = DATASET_PREFIX
 
     @property
     def blob_key(self) -> str:
@@ -66,6 +75,7 @@ class RawPayload:
         return build_blob_key(
             snapshot_date=self.snapshot_date,
             partition_label=self.partition_label,
+            dataset_prefix=self.dataset_prefix,
         )
 
     @property
@@ -98,6 +108,7 @@ def build_payload(
     *,
     snapshot_date: date,
     partition_label: str,
+    dataset_prefix: str = DATASET_PREFIX,
     decorate_with_metadata: bool = True,
 ) -> RawPayload:
     """Serialise ``rows`` as gzipped JSONL exactly once.
@@ -106,9 +117,13 @@ def build_payload(
         rows: Iterable of records to write. Each record is JSON-serialised.
         snapshot_date: Logical partition date for this batch.
         partition_label: Subset identifier (typically the city name).
+        dataset_prefix: Top-level key prefix selecting the dataset.
         decorate_with_metadata: When True, augment each record with
             ``snapshot_date``, ``ingested_at``, and ``source_city`` fields so
-            they survive into the warehouse without joins.
+            they survive into the warehouse without joins. Leave it off for
+            records that already carry their own keys and whose bytes must stay
+            reproducible — a fresh ``ingested_at`` on every run would change the
+            checksum even when the content had not.
 
     Returns:
         A ``RawPayload`` holding the compressed bytes and their row count.
@@ -118,7 +133,11 @@ def build_payload(
 
     line_count = 0
     buffer = bytearray()
-    with gzip.GzipFile(fileobj=_BytearrayWriter(buffer), mode="wb") as gzfile:
+    # mtime=0 keeps the output a pure function of the input. gzip stores a
+    # modification timestamp in its header, so the default would give identical
+    # content a different checksum on every run — which would make the
+    # GCS/S3 reconciler rewrite unchanged objects and rob "in sync" of meaning.
+    with gzip.GzipFile(fileobj=_BytearrayWriter(buffer), mode="wb", mtime=0) as gzfile:
         for record in rows:
             if decorate_with_metadata:
                 enriched = {
@@ -138,6 +157,7 @@ def build_payload(
         row_count=line_count,
         snapshot_date=snapshot_date,
         partition_label=partition_label,
+        dataset_prefix=dataset_prefix,
     )
 
 

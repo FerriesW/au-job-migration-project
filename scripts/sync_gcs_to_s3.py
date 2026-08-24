@@ -36,7 +36,6 @@ from botocore.exceptions import BotoCoreError, ClientError  # noqa: E402
 from google.cloud import storage  # type: ignore[attr-defined]  # noqa: E402
 
 from adzuna_pipeline.config import get_aws, get_gcp  # noqa: E402
-from adzuna_pipeline.storage import DATASET_PREFIX  # noqa: E402
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
@@ -180,8 +179,8 @@ def _render(comparisons: list[Comparison], results: dict[str, str]) -> Table:
 @app.command()
 def main(
     prefix: str = typer.Option(
-        f"{DATASET_PREFIX}/",
-        help="Object-key prefix to reconcile.",
+        "",
+        help="Object-key prefix to reconcile; empty means the whole bucket.",
     ),
     dry_run: bool = typer.Option(
         False,

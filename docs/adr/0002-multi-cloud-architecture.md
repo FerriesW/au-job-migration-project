@@ -75,6 +75,17 @@ on EventBridge + Lambda.
 - The same ~1.4 MB of raw payload is stored in two object stores. Accepted
   duplication: it keeps the two paths independent, so neither cloud is a single
   point of failure for the other.
+- **Only the *raw* path is independent across clouds.** LLM extraction is
+  incremental and its authoritative state is the BigQuery MERGE target, so the
+  extract dataset reaches the landing zones by being exported from the
+  warehouse (`publish_extracts_to_lake.py`) rather than written at source. For
+  derived data the AWS and Snowflake paths therefore depend on GCP. Making them
+  genuinely independent would mean moving extraction state out of BigQuery,
+  which was judged not worth the refactor at this size.
+- Repairing an S3 gap by re-running ingest only works inside Adzuna's 30-day
+  window. Older partitions exist nowhere but GCS, so `scripts/sync_gcs_to_s3.py`
+  — checksum-based, both directions reported — is the only repair path for
+  them, and is part of the fail-soft policy rather than an optional extra.
 - **The two warehouses' staging layers diverge deliberately.** There is no shared
   model layer to keep in sync and no automatic guarantee that BigQuery and
   Snowflake marts agree; any equivalence claim has to be demonstrated, not

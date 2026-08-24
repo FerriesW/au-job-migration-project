@@ -9,7 +9,7 @@ import gzip
 import json
 from datetime import date
 
-from adzuna_pipeline.storage import build_blob_key, build_payload
+from adzuna_pipeline.storage import EXTRACT_PREFIX, build_blob_key, build_payload
 
 
 def test_build_blob_key_canonical_layout() -> None:
@@ -85,6 +85,42 @@ def test_payload_stamps_one_ingested_at_across_all_records() -> None:
     lines = gzip.decompress(payload.data).decode("utf-8").splitlines()
     stamps = {json.loads(line)["ingested_at"] for line in lines}
     assert len(stamps) == 1
+
+
+def test_extract_prefix_produces_a_sibling_dataset_key() -> None:
+    """LLM extracts live beside the raw snapshots, not inside them.
+
+    `adzuna_llm_extract/` must not sit under `adzuna/`, or the Glue table and
+    the Snowflake stage over the raw prefix would swallow records with an
+    entirely different shape.
+    """
+    key = build_blob_key(
+        snapshot_date=date(2026, 5, 7),
+        partition_label="extract",
+        dataset_prefix=EXTRACT_PREFIX,
+    )
+    assert key == "adzuna_llm_extract/snapshot_date=2026-05-07/extract.jsonl.gz"
+    assert not key.startswith("adzuna/")
+
+
+def test_payload_bytes_are_reproducible() -> None:
+    """The same records must compress to the same bytes, run after run.
+
+    gzip writes a modification timestamp into its header. Left at the default
+    this made identical content checksum differently every time, so the
+    GCS/S3 reconciler would rewrite unchanged objects and "in sync" would mean
+    nothing. `build_payload` pins mtime=0; this is the guard on that.
+    """
+    records = [{"job_id": "1", "skill": "dbt"}, {"job_id": "2", "skill": "sql"}]
+    kwargs = {
+        "snapshot_date": date(2026, 5, 7),
+        "partition_label": "extract",
+        "dataset_prefix": EXTRACT_PREFIX,
+        "decorate_with_metadata": False,
+    }
+    first = build_payload(records, **kwargs)  # type: ignore[arg-type]
+    second = build_payload(records, **kwargs)  # type: ignore[arg-type]
+    assert first.data == second.data
 
 
 def test_payload_size_matches_serialised_bytes() -> None:

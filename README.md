@@ -59,13 +59,36 @@ This project closes that information gap for the Visa Applicant view.
 ## Architecture
 
 ```
-+--------------+    +-----+    +----------+    +---------------+    +----------+
-| Adzuna API   | -> | GCS | -> | BigQuery | -> | dbt Core      | -> | Power BI |
-| Home Affairs |    |     |    | raw      |    | staging       |    | report   |
-| DashScope    |    |     |    |          |    | intermediate  |    |          |
-| (Qwen-Turbo) |    |     |    |          |    | marts         |    |          |
-+--------------+    +-----+    +----------+    +---------------+    +----------+
+                     +-----+     +----------+     +--------------+     +----------+
+                +--> | GCS | --> | BigQuery | --> | dbt Core     | --> | Power BI |
+                |    +-----+     | raw      |     | staging      |     | report   |
++-------------+ |                +----------+     | intermediate |     +----------+
+| Adzuna API  | |                                 | marts        |
+| Home Affairs|-+                                 +--------------+
+| DashScope   | |
+| (Qwen-Turbo)| |    +-----+     +----------+     +--------------+
++-------------+ +--> | S3  | --> | Glue     | --> | Athena       |
+                     +-----+     | Catalog  |     | query-in-    |
+                                 +----------+     | place        |
+                                                  +--------------+
 ```
+
+One ingestion run serialises each snapshot once and writes it to **two landing
+zones**, GCS and S3, which are byte-identical — same object key, same MD5. From
+there the paths diverge on purpose.
+
+The **GCP path is production**: BigQuery loads from GCS, dbt builds the marts,
+Power BI reads them, and a monthly keyless-OIDC GitHub Actions job rebuilds the
+warehouse. The **AWS path queries the lake in place**: a hand-written Glue Data
+Catalog table sits over the same S3 objects and Athena reads them without ever
+loading the data, which is the architectural contrast worth having — warehouse
+versus lakehouse over one dataset.
+
+This is deliberately *not* one dbt project made portable across warehouses.
+[ADR-0002](docs/adr/0002-multi-cloud-architecture.md) records why that was
+considered and rejected; [`aws/README.md`](aws/README.md) covers the catalogue,
+the Trino/BigQuery dialect differences found while cross-checking, and the
+equivalence results between the two engines.
 
 ### dbt lineage
 
@@ -100,12 +123,15 @@ data tests pass end-to-end.
 | Concern | Tool |
 |---|---|
 | Ingestion | Python 3.11+ · httpx · tenacity · Adzuna API |
-| Object storage | Google Cloud Storage (gzipped JSONL, partitioned by snapshot date) |
+| Landing zones | Google Cloud Storage + Amazon S3 — byte-identical mirrors, gzipped JSONL, Hive-partitioned by snapshot date |
 | Warehouse | Google BigQuery (raw / staging / marts) |
+| Lakehouse | AWS Glue Data Catalog + Amazon Athena (Trino) — query-in-place, partition projection, no crawler |
 | Transformation | dbt Core 1.11 · dbt-bigquery · dbt-utils |
 | LLM extraction | Qwen-Turbo via Alibaba DashScope (OpenAI-compatible endpoint) |
 | LLM-as-judge eval | Qwen-Plus, with per-field accuracy scoring |
 | BI | Power BI Desktop (theme imported via JSON) |
+| CI/CD | GitHub Actions — hermetic PR gate (ruff · mypy --strict · pytest · offline `dbt parse`, zero secrets) and a keyless OIDC scheduled build |
+| Cloud identity | Workload Identity Federation on GCP; least-privilege IAM user on AWS, scoped to one bucket |
 | Code & data versioning | Git / GitHub |
 
 ---
@@ -153,7 +179,9 @@ account, so v1 ships as high-resolution PNG screenshots under
 
 The pipeline is reproducible end to end. Prerequisites: a GCP project
 with BigQuery enabled, an Adzuna developer account, and a DashScope
-(international tenant for free quota) API key.
+(international tenant for free quota) API key. The AWS side is optional —
+without it, ingest reports the S3 mirror as disabled and the GCP path runs
+unchanged.
 
 ```bash
 # 1. Sync dependencies
@@ -166,7 +194,8 @@ cp .env.example .env
 # 3. Run the source-data sanity check
 uv run python scripts/verify_adzuna_source.py --where "Melbourne,Sydney,Brisbane"
 
-# 4. Ingest job postings to GCS and BigQuery
+# 4. Ingest job postings into both landing zones, then load BigQuery from GCS
+#    (--skip-s3 to write GCS only)
 uv run --env-file .env python scripts/ingest_adzuna.py --replace-partition
 
 # 5. Extract structured LLM signals
@@ -179,6 +208,21 @@ uv run --env-file .env dbt build --project-dir dbt --profiles-dir dbt
 uv run --env-file .env python scripts/evaluate_extraction.py --sample-size 50
 
 # 8. Open the Power BI report (.pbix; gitignored) and refresh
+```
+
+The AWS path is independent of steps 5–8:
+
+```bash
+# Publish the LLM extract table into both landing zones (runs after step 5;
+# extraction is incremental, so the whole table is exported per snapshot date)
+uv run --env-file .env python scripts/publish_extracts_to_lake.py --dry-run
+
+# Reconcile the S3 mirror against GCS (repairs any partition older than
+# Adzuna's 30-day window, which re-running ingest cannot reach)
+uv run --env-file .env python scripts/sync_gcs_to_s3.py --dry-run
+
+# Apply the Glue catalog DDL through Athena and verify it end to end
+uv run --env-file .env python scripts/apply_athena_ddl.py --verify
 ```
 
 Step-by-step setup guides for each layer live in `docs/`:
@@ -202,7 +246,10 @@ Step-by-step setup guides for each layer live in `docs/`:
 │   ├── seeds/               # anzsco_title_patterns, occupation_ceilings, ...
 │   ├── macros/
 │   └── tests/               # custom singular tests
-├── scripts/                 # Typer CLIs (verify, ingest, extract, evaluate, sync)
+├── aws/                     # AWS side of the multi-cloud track
+│   ├── glue/                # versioned Glue catalog DDL, applied via Athena
+│   └── README.md            # dialect notes + Athena/BigQuery equivalence results
+├── scripts/                 # Typer CLIs (verify, ingest, extract, evaluate, sync, ddl)
 ├── tests/                   # pure-logic unit tests, run by the CI gate
 ├── .github/                 # CI (hermetic PR gate) + CD (keyless OIDC build)
 ├── docs/adr/                # architecture decision records

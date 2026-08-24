@@ -67,6 +67,8 @@ class AwsSettings(_BaseSettings):
 
     region: str = Field("ap-southeast-2", alias="AWS_REGION")
     bucket_raw: str = Field(..., alias="S3_BUCKET_RAW")
+    athena_output: str = Field("", alias="ATHENA_OUTPUT_S3")
+    athena_workgroup: str = Field("primary", alias="ATHENA_WORKGROUP")
 
 
 class RuntimeSettings(_BaseSettings):
