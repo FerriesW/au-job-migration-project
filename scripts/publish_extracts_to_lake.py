@@ -27,7 +27,6 @@ import logging
 import sys
 from collections import defaultdict
 from datetime import date
-from pathlib import Path
 from typing import Any, Final
 
 import typer
@@ -36,7 +35,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+from adzuna_pipeline.cli import PROJECT_ROOT, configure_logging
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Module imports must follow load_dotenv so config classes pick up env values.
@@ -58,15 +58,6 @@ PARTITION_LABEL: Final[str] = "extract"
 
 app = typer.Typer(add_completion=False, help="Publish LLM extracts to the landing zones.")
 console = Console()
-
-
-def _configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    )
-    for noisy in ("google.auth", "botocore", "urllib3"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def _to_record(row: Any) -> dict[str, Any]:
@@ -145,7 +136,7 @@ def main(
     log_level: str = typer.Option("INFO", help="Logging level."),
 ) -> None:
     """Export the extract table to `adzuna_llm_extract/` in GCS and S3."""
-    _configure_logging(log_level)
+    configure_logging(log_level)
     gcp = get_gcp()
     snapshot = date.fromisoformat(snapshot_date) if snapshot_date else None
     table_id = f"{gcp.project_id}.{gcp.dataset_staging}.{EXTRACT_TABLE}"

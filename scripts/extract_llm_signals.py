@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from datetime import date
-from pathlib import Path
-from typing import Final
 
 import typer
 from dotenv import load_dotenv
@@ -15,22 +12,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+from adzuna_pipeline.cli import PROJECT_ROOT, configure_logging
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 from adzuna_pipeline.extraction.batch import ExtractionBatchProcessor  # noqa: E402
 
 app = typer.Typer(add_completion=False, help="LLM extraction pipeline.")
 console = Console()
-
-
-def _configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    )
-    for noisy in ("httpx", "httpcore", "google.auth", "urllib3"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 @app.command()
@@ -55,7 +44,7 @@ def main(
     log_level: str = typer.Option("INFO", help="Logging level."),
 ) -> None:
     """Extract structured signals from pending Adzuna jobs and upsert to BigQuery."""
-    _configure_logging(log_level)
+    configure_logging(log_level)
     snap = date.fromisoformat(snapshot_date) if snapshot_date else None
 
     processor = ExtractionBatchProcessor()

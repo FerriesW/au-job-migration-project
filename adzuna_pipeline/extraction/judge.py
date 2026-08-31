@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from enum import StrEnum
 from typing import Final
 
@@ -134,8 +133,8 @@ def build_judge_messages(
 
 
 def _resolve_judge_model() -> str:
-    """Return the judge model name from env override or built-in default."""
-    return os.getenv("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
+    """Return the judge model name from settings, or the built-in default."""
+    return get_dashscope().judge_model or DEFAULT_JUDGE_MODEL
 
 
 class QwenJudge:

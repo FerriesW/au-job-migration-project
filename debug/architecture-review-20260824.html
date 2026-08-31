@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture review — AU Migration &amp; Jobs Radar</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: { fontFamily: 'ui-sans-serif, system-ui' } });
+</script>
+<style>
+  .card { background:#111827; border:1px solid #1f2937; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .shallow { background: repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 6px,#991b1b 6px,#991b1b 12px); }
+  .deep { background: linear-gradient(180deg,#065f46,#064e3b); }
+</style>
+</head>
+<body class="bg-gray-950 text-gray-200 antialiased">
+
+<header class="max-w-6xl mx-auto px-6 pt-12 pb-8">
+  <p class="text-sm uppercase tracking-widest text-gray-500">Architecture review · 2026-08-24</p>
+  <h1 class="text-4xl font-bold text-white mt-2">AU Migration &amp; Jobs Radar</h1>
+  <p class="mt-4 text-lg text-gray-400 max-w-3xl">
+    Triggered by a fair complaint: every step was becoming a question, and the structure had gone
+    scattered. This is the audit, what was actually wrong, what was changed, and what is left.
+  </p>
+  <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="card rounded-lg p-4"><div class="text-3xl font-bold text-emerald-400">−230</div><div class="text-sm text-gray-400">lines of unreachable code deleted</div></div>
+    <div class="card rounded-lg p-4"><div class="text-3xl font-bold text-emerald-400">6 → 1</div><div class="text-sm text-gray-400">copies of the logging setup</div></div>
+    <div class="card rounded-lg p-4"><div class="text-3xl font-bold text-emerald-400">62 → 76</div><div class="text-sm text-gray-400">tests passing</div></div>
+    <div class="card rounded-lg p-4"><div class="text-3xl font-bold text-emerald-400">0 → 5</div><div class="text-sm text-gray-400">reproducible equivalence checks</div></div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 pb-24 space-y-12">
+
+<!-- VERDICT -->
+<section class="card rounded-xl p-6">
+  <h2 class="text-2xl font-bold text-white">Verdict</h2>
+  <p class="mt-3 text-gray-300">
+    Not spaghetti. Phase&nbsp;1 was coherent and stayed coherent. What had drifted was narrower and
+    more dangerous than mess: <strong class="text-white">code the documentation claimed was alive but
+    was not</strong>, and <strong class="text-white">a headline claim with no reproducible evidence
+    behind it</strong>. Both are fixed. The scattered feeling came from decisions being surfaced one
+    at a time instead of being absorbed by the records that already existed.
+  </p>
+</section>
+
+<!-- CANDIDATE 1 -->
+<section class="card rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2">
+    <h2 class="text-2xl font-bold text-white">1 · One interface over three query engines</h2>
+    <span class="px-3 py-1 rounded-full bg-emerald-900 text-emerald-200 text-sm font-semibold">Strong · applied</span>
+  </div>
+  <div class="p-6 space-y-5">
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Files</h3>
+      <p class="mono text-sm mt-1 text-sky-300">adzuna_pipeline/engines.py · adzuna_pipeline/equivalence.py · scripts/compare_engines.py · scripts/apply_athena_ddl.py</p>
+    </div>
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Problem</h3>
+      <p class="mt-1 text-gray-300">
+        The project's central claim — BigQuery, Athena and Snowflake agree over the same data — was
+        checked with throwaway scripts in a temp directory. The numbers reached three READMEs; the
+        scripts did not survive. Meanwhile the Athena submit-poll-fetch cycle had been written twice
+        inside a single file. There was no <em>module</em> for "ask a warehouse a question", so every
+        caller re-derived one, and none of them left anything behind.
+      </p>
+    </div>
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Solution</h3>
+      <p class="mt-1 text-gray-300">
+        A <strong>QueryEngine</strong> interface of three things — a name, <span class="mono">run</span>,
+        <span class="mono">close</span> — with three <strong>adapters</strong> behind it. Every value
+        comes back normalised to a string, which is the part that actually earns the module: without
+        it, "do the engines agree?" degenerates into arguing about
+        <span class="mono">4704</span> vs <span class="mono">'4704'</span> vs
+        <span class="mono">Decimal('4704')</span>. The questions themselves became data in
+        <span class="mono">equivalence.py</span>, each spelled three ways side by side.
+      </p>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h4 class="text-xs uppercase tracking-wider text-red-400 font-semibold mb-2">Before — no module</h4>
+        <div class="space-y-2">
+          <div class="shallow rounded p-2 text-xs mono text-red-100">scratchpad/equiv.py — own client, own polling</div>
+          <div class="shallow rounded p-2 text-xs mono text-red-100">scratchpad/three_way.py — own client, own polling</div>
+          <div class="shallow rounded p-2 text-xs mono text-red-100">apply_athena_ddl._run — polling, copy 1</div>
+          <div class="shallow rounded p-2 text-xs mono text-red-100">apply_athena_ddl._fetch_rows — polling, copy 2</div>
+          <p class="text-xs text-red-300 mt-2">Four implementations. Two deleted themselves. Evidence: none.</p>
+        </div>
+      </div>
+      <div>
+        <h4 class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">After — a real seam</h4>
+        <div class="border border-emerald-700 rounded overflow-hidden">
+          <div class="bg-emerald-950 p-2 text-xs mono text-emerald-200 text-center">interface: name · run(sql) · close()</div>
+          <div class="deep p-4 text-xs text-emerald-100 space-y-1">
+            <div>credentials for three clouds</div>
+            <div>submit / poll / fetch, header stripping</div>
+            <div>Decimal, date, bool → comparable strings</div>
+            <div>scanned-bytes reporting where it exists</div>
+          </div>
+          <div class="grid grid-cols-3 text-[10px] mono text-center border-t border-emerald-800">
+            <div class="p-1 bg-emerald-900/40">BigQuery</div><div class="p-1 bg-emerald-900/40 border-x border-emerald-800">Athena</div><div class="p-1 bg-emerald-900/40">Snowflake</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Benefits</h3>
+      <ul class="mt-1 text-gray-300 list-disc pl-5 space-y-1">
+        <li><strong>Leverage</strong>: two callers already. <span class="mono">apply_athena_ddl.py</span> lost 100 lines by handing polling to the module.</li>
+        <li><strong>Locality</strong>: a fourth engine, or a change to how results are compared, is one file.</li>
+        <li><strong>The interface is the test surface</strong>: <span class="mono">normalise()</span> is pure and testable without a cloud; everything needing credentials sits behind <span class="mono">run</span>.</li>
+        <li>Three adapters, not one — this seam is real, not hypothetical.</li>
+      </ul>
+    </div>
+    <div class="bg-emerald-950/50 border border-emerald-800 rounded p-4">
+      <p class="text-sm text-emerald-200"><strong>Result, run for real:</strong> all five checks agree across three engines. It also produced the cost comparison ADR-0002 promised — BigQuery scanned 618,900 bytes for the same five questions, Athena 3,171,347. A 5× gap that is storage format, not workload: BigQuery reads named columns, Athena decompresses whole JSON objects.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CANDIDATE 2 -->
+<section class="card rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2">
+    <h2 class="text-2xl font-bold text-white">2 · Configuration read in exactly one place</h2>
+    <span class="px-3 py-1 rounded-full bg-emerald-900 text-emerald-200 text-sm font-semibold">Strong · applied</span>
+  </div>
+  <div class="p-6 space-y-5">
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Files</h3>
+      <p class="mono text-sm mt-1 text-sky-300">adzuna_pipeline/config.py · extraction/client.py · extraction/judge.py · tests/test_env_example_documents_settings.py</p>
+    </div>
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Problem</h3>
+      <p class="mt-1 text-gray-300">
+        <span class="mono">config.py</span> looked like the single seam for configuration, but two
+        modules went around it with <span class="mono">os.getenv</span>. Meanwhile a
+        <span class="mono">RuntimeSettings</span> class and two documented variables had no callers at
+        all. The existing test only checked that declared settings were documented — never the
+        reverse — so dead configuration passed cleanly.
+      </p>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h4 class="text-xs uppercase tracking-wider text-red-400 font-semibold mb-2">Before</h4>
+        <pre class="mono text-xs bg-gray-900 rounded p-3 text-red-200 overflow-x-auto">.env  ──┬─→ config.py (settings classes)
+        ├─→ client.py   os.getenv("DASHSCOPE_BASE_URL")
+        └─→ judge.py    os.getenv("JUDGE_MODEL")
+
+RuntimeSettings ──→ (nobody)
+LOG_LEVEL, SAMPLE_LIMIT documented, unread</pre>
+      </div>
+      <div>
+        <h4 class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">After</h4>
+        <pre class="mono text-xs bg-gray-900 rounded p-3 text-emerald-200 overflow-x-auto">.env  ──→ config.py ──┬─→ client.py
+                      ├─→ judge.py
+                      └─→ engines.py
+
+test asserts BOTH directions:
+  declared ⊆ documented
+  documented ⊆ declared ∪ {boto3's two}</pre>
+      </div>
+    </div>
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Benefits</h3>
+      <p class="mt-1 text-gray-300">
+        <strong>Locality</strong>: one module reads the environment, so "what does this project need
+        configured?" has one answer. The bidirectional test makes that structural rather than
+        aspirational — it is what surfaced the two dead variables, and it will surface the next one.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- CANDIDATE 3 -->
+<section class="card rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2">
+    <h2 class="text-2xl font-bold text-white">3 · Deleting what the documentation claimed was alive</h2>
+    <span class="px-3 py-1 rounded-full bg-emerald-900 text-emerald-200 text-sm font-semibold">Strong · applied</span>
+  </div>
+  <div class="p-6 space-y-5">
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Problem</h3>
+      <p class="mt-1 text-gray-300">
+        ADR-0002 stated that <span class="mono">sync_bq_to_snowflake.py</span> was "repurposed rather
+        than discarded". It was neither: loading from an external stage turned out to be four SQL
+        statements, and the 230-line script was never touched again. Three other documents described
+        the architecture that ADR-0002 had rejected.
+      </p>
+    </div>
+    <div>
+      <h3 class="font-semibold text-gray-400 uppercase text-xs tracking-wider">Applying the deletion test</h3>
+      <p class="mt-1 text-gray-300">
+        Deleting the script concentrates nothing and moves nothing — the behaviour already lives in
+        <span class="mono">snowflake/03</span>–<span class="mono">04</span>. That is the signature of
+        a module that stopped earning its keep, and the only thing keeping it was a sentence in a
+        record.
+      </p>
+    </div>
+    <ul class="text-gray-300 list-disc pl-5 space-y-1">
+      <li><span class="mono text-red-300">scripts/sync_bq_to_snowflake.py</span> — deleted, with its console-script entry</li>
+      <li><span class="mono text-red-300">RuntimeSettings</span> and <span class="mono text-red-300">get_runtime</span> — deleted</li>
+      <li><span class="mono text-red-300">docs/snowflake-setup-guide.md</span>, <span class="mono text-red-300">HANDOFF.md</span> — deleted; both described the rejected portability architecture</li>
+      <li>ADR-0002's prediction left visible and corrected in place, not quietly edited out</li>
+      <li><span class="mono">dev_log.txt</span> — v0.11.0 covers the two months of Phase 2 it had missed</li>
+    </ul>
+  </div>
+</section>
+
+<!-- CANDIDATE 4 -->
+<section class="card rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2">
+    <h2 class="text-2xl font-bold text-white">4 · Shared entry-point plumbing</h2>
+    <span class="px-3 py-1 rounded-full bg-sky-900 text-sky-200 text-sm font-semibold">Worth doing · applied</span>
+  </div>
+  <div class="p-6 space-y-4">
+    <p class="text-gray-300">
+      Six copies of <span class="mono">_configure_logging</span> and nine of the project-root
+      boilerplate, already drifting apart in which loggers they silenced — which matters here,
+      because <span class="mono">httpx</span> at INFO writes the Adzuna application key into stdout.
+      Now one module.
+    </p>
+    <p class="text-gray-400 text-sm">
+      Honestly shallow: the interface is nearly as large as the implementation. It earns its place on
+      <strong>locality</strong> alone — a new noisy dependency is one line, in one file, instead of six
+      edits someone will do five of.
+    </p>
+  </div>
+</section>
+
+<!-- REMAINING -->
+<section class="card rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800">
+    <h2 class="text-2xl font-bold text-white">What is still open</h2>
+  </div>
+  <div class="p-6 space-y-6">
+    <div class="border-l-4 border-amber-600 pl-4">
+      <h3 class="font-semibold text-white">Separating the Snowflake dbt models <span class="text-xs px-2 py-0.5 rounded bg-amber-900 text-amber-200 ml-2">decided, not yet built</span></h3>
+      <p class="text-gray-300 mt-1 text-sm">
+        One dbt project, two targets: Snowflake models would run against BigQuery unless isolated.
+        Resolved as <span class="mono">+enabled</span> driven by target type, set once in
+        <span class="mono">dbt_project.yml</span> per path — dbt's standard idiom, one project, one CI.
+      </p>
+      <div class="mt-2 bg-amber-950/40 border border-amber-800 rounded p-3 text-sm text-amber-200">
+        ⚠ ADR-0002 says "no <span class="mono">target.type</span> branching anywhere". That was written
+        against branching <em>inside a model's SQL for portability</em>; selecting which models exist per
+        warehouse is a different thing. The record needs one sentence drawing that line — otherwise the
+        next reader is right to object.
+      </div>
+    </div>
+    <div class="border-l-4 border-gray-700 pl-4">
+      <h3 class="font-semibold text-white">The gate cannot check the multi-cloud claim</h3>
+      <p class="text-gray-300 mt-1 text-sm">
+        <span class="mono">compare_engines.py</span> needs credentials for three clouds, so ADR-0001's
+        hermetic pull-request gate can never run it. Structural, not fixable: it is a release check.
+        Worth naming so nobody assumes CI is watching.
+      </p>
+    </div>
+    <div class="border-l-4 border-gray-700 pl-4">
+      <h3 class="font-semibold text-white">The landing-zone uploaders are already fine</h3>
+      <p class="text-gray-300 mt-1 text-sm">
+        <span class="mono">GcsRawUploader</span> / <span class="mono">S3RawUploader</span> behind
+        <span class="mono">RawUploader</span>, with the key derived from the payload so neither adapter
+        can choose where its object lands. Two adapters, real seam, no change needed. Noted so a future
+        review does not re-suggest it.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- TOP RECOMMENDATION -->
+<section class="rounded-xl overflow-hidden border-2 border-emerald-700">
+  <div class="bg-emerald-950 px-6 py-4"><h2 class="text-2xl font-bold text-emerald-200">Top recommendation</h2></div>
+  <div class="p-6 bg-gray-900 space-y-3">
+    <p class="text-gray-200">
+      <strong class="text-white">Build the Snowflake dbt layer next, and amend ADR-0002's one sentence
+      first.</strong> Everything else in the cleanup is done; that is the single decision left blocking
+      forward motion, and it is blocked only by wording in a record I wrote.
+    </p>
+    <p class="text-gray-400 text-sm">
+      Scope it as one vertical slice — two staging models off the VARIANT tables plus the one mart that
+      needs <span class="mono">lateral flatten</span>. Replicating the ANZSCO marts would mean loading four
+      seeds into Snowflake to demonstrate nothing Snowflake-specific.
+    </p>
+    <p class="text-gray-400 text-sm">
+      With 24 days of trial left, the constraint is the clock, not the code.
+    </p>
+  </div>
+</section>
+
+<footer class="text-center text-gray-600 text-sm pt-4">
+  Gate at time of writing: ruff · ruff format (30 files) · mypy --strict (24 source files) · pytest (76) · dbt parse — all clean.
+</footer>
+
+</main>
+</body>
+</html>

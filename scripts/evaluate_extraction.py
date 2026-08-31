@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 import typer
 from dotenv import load_dotenv
@@ -16,7 +14,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+from adzuna_pipeline.cli import PROJECT_ROOT, configure_logging
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 from adzuna_pipeline.config import get_gcp  # noqa: E402
@@ -46,15 +45,6 @@ class JudgedRow:
     extraction: ExtractionResult
     judgment: ExtractionJudgment | None
     error: str | None
-
-
-def _configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    )
-    for noisy in ("httpx", "httpcore", "google.auth", "urllib3"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def _fetch_evaluation_set(sample_size: int, only_with_signal: bool) -> list[dict[str, Any]]:
@@ -252,7 +242,7 @@ def main(
     log_level: str = typer.Option("INFO"),
 ) -> None:
     """Evaluate extraction quality via an LLM judge and print a per-field report."""
-    _configure_logging(log_level)
+    configure_logging(log_level)
     console.print(
         Panel.fit(
             f"[bold]LLM-as-judge evaluation[/bold]\n"

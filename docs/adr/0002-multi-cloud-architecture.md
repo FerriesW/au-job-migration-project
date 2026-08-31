@@ -82,6 +82,12 @@ on EventBridge + Lambda.
   derived data the AWS and Snowflake paths therefore depend on GCP. Making them
   genuinely independent would mean moving extraction state out of BigQuery,
   which was judged not worth the refactor at this size.
+- The equivalence claim above is only as good as its evidence, so it is
+  executable: `scripts/compare_engines.py` runs the checks in
+  `adzuna_pipeline/equivalence.py` against all three engines and exits non-zero
+  if any two disagree. It needs credentials for three clouds and therefore
+  cannot run in the hermetic CI gate of ADR-0001 — it is a release check, not a
+  pull-request check.
 - Repairing an S3 gap by re-running ingest only works inside Adzuna's 30-day
   window. Older partitions exist nowhere but GCS, so `scripts/sync_gcs_to_s3.py`
   — checksum-based, both directions reported — is the only repair path for
@@ -93,9 +99,13 @@ on EventBridge + Lambda.
 - **The Snowflake account must be created on AWS in ap-southeast-2** so that
   reads from S3 stay same-region and incur no egress. Cloud and region are fixed
   at signup and cannot be changed afterwards.
-- `scripts/sync_bq_to_snowflake.py` is repurposed rather than discarded: the
-  stage + `COPY INTO` logic is retained, while the BigQuery→Arrow→Parquet source
-  is replaced by the S3 external stage.
+- `scripts/sync_bq_to_snowflake.py` was **deleted**, not repurposed. An earlier
+  revision of this record predicted it would be reworked to read from S3; in
+  the event, loading from an external stage turned out to be four statements of
+  SQL (`snowflake/03`–`04`) rather than a Python program, and the script became
+  230 lines of unreachable code. The prediction is left here rather than
+  quietly edited out, because "we kept the old thing" is exactly the kind of
+  claim a reader would otherwise trust.
 - `adzuna_pipeline/storage.py` grows a second uploader alongside `GcsRawUploader`,
   and `UploadResult.gcs_uri` is renamed to `uri` (three call sites in
   `scripts/ingest_adzuna.py`).

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import Final
 
 import typer
@@ -15,7 +13,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+from adzuna_pipeline.cli import PROJECT_ROOT, configure_logging
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Module imports must follow load_dotenv so config classes pick up env values.
@@ -55,21 +54,6 @@ class CityIngestReport:
     gcs_upload: UploadResult | None = None
     s3_upload: UploadResult | None = None
     s3_error: str | None = None
-
-
-def _configure_logging(level: str) -> None:
-    """Configure root logging and suppress noisy third-party loggers.
-
-    httpx logs each request URL at INFO; for Adzuna the URL contains the
-    application key as a query parameter, so we cap httpx at WARNING to keep
-    credentials out of stdout and log files.
-    """
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    )
-    for noisy in ("httpx", "httpcore", "google.auth", "urllib3"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def _parse_cities(value: str) -> list[str]:
@@ -177,7 +161,7 @@ def main(
     on. Re-running ingest for the same snapshot date repairs a missed mirror,
     because every upload overwrites its key.
     """
-    _configure_logging(log_level)
+    configure_logging(log_level)
     target_cities = _parse_cities(cities)
     if not target_cities:
         console.print("[red]No cities specified.[/red]")

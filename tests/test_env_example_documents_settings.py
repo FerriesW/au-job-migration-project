@@ -20,6 +20,12 @@ from adzuna_pipeline import config
 
 ENV_EXAMPLE = Path(__file__).resolve().parent.parent / ".env.example"
 
+# Variables a third-party credential chain reads on our behalf. boto3 resolves
+# these itself, and `AwsSettings` deliberately does not declare them — pulling
+# secrets into our own objects would gain nothing and would stop the same code
+# working under SSO or an assumed role, where neither variable is set.
+READ_BY_A_LIBRARY: frozenset[str] = frozenset({"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"})
+
 
 def _declared_aliases() -> dict[str, str]:
     """Map every env-var alias declared in config.py to its settings class."""
@@ -53,6 +59,21 @@ def _documented_keys() -> set[str]:
 def test_config_declares_some_settings() -> None:
     """Guard the guard: a broken reflection would make every check vacuous."""
     assert len(_declared_aliases()) > 10
+
+
+def test_no_documented_setting_is_unread() -> None:
+    """The template must not advertise variables nothing reads.
+
+    The forward check alone let dead configuration accumulate: `LOG_LEVEL` and
+    `SAMPLE_LIMIT` sat in the template and in a `RuntimeSettings` class that no
+    caller ever constructed, so both passed. A variable a newcomer sets and
+    then finds has no effect is worse than one that is simply absent.
+    """
+    declared = set(_declared_aliases()) | READ_BY_A_LIBRARY
+    documented = _documented_keys()
+    assert documented <= declared, (
+        f".env.example documents settings no code reads: {sorted(documented - declared)}"
+    )
 
 
 @pytest.mark.parametrize(

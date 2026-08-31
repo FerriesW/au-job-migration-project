@@ -223,7 +223,15 @@ uv run --env-file .env python scripts/sync_gcs_to_s3.py --dry-run
 
 # Apply the Glue catalog DDL through Athena and verify it end to end
 uv run --env-file .env python scripts/apply_athena_ddl.py --verify
+
+# Prove the three engines still agree, and report what each scanned
+uv run --env-file .env python scripts/compare_engines.py
 ```
+
+`compare_engines.py` is the evidence behind the equivalence numbers quoted
+below: it asks each engine the same five questions in its own dialect and exits
+non-zero if any two disagree. It needs credentials for all three clouds, so it
+is a release check rather than something the pull-request gate can run.
 
 Step-by-step setup guides for each layer live in `docs/`:
 `gcp-setup-guide.md`, `powerbi-setup-guide.md`,
@@ -253,6 +261,7 @@ Step-by-step setup guides for each layer live in `docs/`:
 ├── tests/                   # pure-logic unit tests, run by the CI gate
 ├── .github/                 # CI (hermetic PR gate) + CD (keyless OIDC build)
 ├── docs/adr/                # architecture decision records
+├── debug/                   # dated audits of the codebase itself
 ├── screenshots/             # dashboard exports for README and LinkedIn
 ├── pyproject.toml           # uv-managed Python deps
 ├── .env.example             # env-var template

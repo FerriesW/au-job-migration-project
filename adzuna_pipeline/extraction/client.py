@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Final
 
 import httpx
@@ -37,10 +36,7 @@ def _resolve_base_url() -> str:
     .env files (``KEY="https://..."`` or trailing spaces) still produce a
     usable URL rather than failing later with an opaque transport error.
     """
-    raw = os.getenv("DASHSCOPE_BASE_URL")
-    if raw is None:
-        return DASHSCOPE_BASE_URL_DEFAULT
-    cleaned = raw.strip().strip('"').strip("'")
+    cleaned = get_dashscope().base_url.strip().strip('"').strip("'")
     return cleaned or DASHSCOPE_BASE_URL_DEFAULT
 
 

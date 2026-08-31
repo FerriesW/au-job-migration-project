@@ -95,6 +95,28 @@ Same `snapshot_date = 2026-05-07`, verified 2026-08-10:
 | Top skills | AWS 107 · Azure 52 · Salesforce 47 · SAP 26 · AI 23 | identical | identical |
 | Sponsorship signal | explicit_no 99 · explicit_yes 2 · unspecified 3,874 | identical | identical |
 
+These numbers are not transcribed. `scripts/compare_engines.py` regenerates
+them by asking each engine the same question in its own dialect, and exits
+non-zero if any two disagree; the questions live in
+`adzuna_pipeline/equivalence.py`, each spelled three ways side by side.
+
+### What the same questions cost
+
+Over those five checks, run 2026-08-24:
+
+| Engine | Bytes scanned | Billing model |
+|---|---|---|
+| BigQuery | 618,900 | per byte scanned, 1 TiB/month free |
+| Athena | 3,171,347 | per byte scanned, $5/TB, 10 MB minimum per query |
+| Snowflake | not exposed per query | per credit-second of warehouse uptime |
+
+Athena reads five times as much for identical answers. That is the storage
+format, not the question: BigQuery reads only the columns a query names, while
+Athena has to decompress and parse the whole JSON object every time. It is the
+clearest argument in this project for converting a landing zone to Parquet
+before anyone queries it seriously — and the reason the difference is worth
+measuring rather than assuming.
+
 ### Same array, three idioms
 
 | | Reaching into `required_skills` |

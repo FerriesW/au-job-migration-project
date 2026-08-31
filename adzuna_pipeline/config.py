@@ -39,10 +39,20 @@ class GcpSettings(_BaseSettings):
 
 
 class DashScopeSettings(_BaseSettings):
-    """Alibaba DashScope (Qwen) API configuration."""
+    """Alibaba DashScope (Qwen) API configuration.
+
+    `base_url` is blank by default, meaning "use the mainland-China endpoint";
+    the caller supplies the fallback so the literal URL stays next to the code
+    that talks to it. It is read here rather than by `os.getenv` at the call
+    site so this class remains the only thing in the package that reads the
+    environment — which is what makes the `.env.example` documentation test
+    able to prove no variable is either undocumented or unread.
+    """
 
     api_key: str = Field(..., alias="DASHSCOPE_API_KEY")
     model: str = Field("qwen-turbo", alias="QWEN_MODEL")
+    judge_model: str = Field("qwen-plus", alias="JUDGE_MODEL")
+    base_url: str = Field("", alias="DASHSCOPE_BASE_URL")
 
 
 class SnowflakeSettings(_BaseSettings):
@@ -69,13 +79,6 @@ class AwsSettings(_BaseSettings):
     bucket_raw: str = Field(..., alias="S3_BUCKET_RAW")
     athena_output: str = Field("", alias="ATHENA_OUTPUT_S3")
     athena_workgroup: str = Field("primary", alias="ATHENA_WORKGROUP")
-
-
-class RuntimeSettings(_BaseSettings):
-    """Runtime knobs shared across pipeline components."""
-
-    log_level: str = Field("INFO", alias="LOG_LEVEL")
-    sample_limit: int = Field(0, alias="SAMPLE_LIMIT")
 
 
 @lru_cache(maxsize=1)
@@ -106,9 +109,3 @@ def get_snowflake() -> SnowflakeSettings:
 def get_aws() -> AwsSettings:
     """Return cached AWS settings."""
     return AwsSettings()
-
-
-@lru_cache(maxsize=1)
-def get_runtime() -> RuntimeSettings:
-    """Return cached runtime settings."""
-    return RuntimeSettings()

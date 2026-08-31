@@ -7,6 +7,111 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-08-24]  v0.11.0 — Multi-cloud: S3 landing zone, Athena, Snowflake, and
+                        an executable equivalence claim
+------------------------------------------------------------------------------
+
+Scope of work
+  - Adopted ADR-0002: AWS and Snowflake run as a second path alongside GCP
+    rather than one dbt project made portable across warehouses. Both
+    mechanisms for portability (inline target.type branches and an
+    adapter.dispatch macro layer) were considered and rejected.
+  - Landing zone dual-write: ingest_adzuna.py serialises each snapshot once
+    and writes byte-identical copies to gs:// and s3:// under the same key.
+    A failing S3 write is reported and reflected in the exit code but never
+    interrupts the GCP path.
+  - scripts/sync_gcs_to_s3.py reconciles the two zones by MD5 rather than by
+    presence, and reports S3 objects with no GCS counterpart without deleting
+    them. It is the only repair path for partitions older than Adzuna's
+    30-day window, which re-running ingest cannot reach.
+  - AWS catalogue: aws/glue/ holds hand-written Glue DDL applied through
+    Athena by scripts/apply_athena_ddl.py. No crawler; partitions come from
+    projection, so a new snapshot is queryable the moment ingest writes it.
+  - Snowflake: snowflake/ holds the account objects, the S3 storage
+    integration, the external stages and a VARIANT-native landing layer.
+    A resource monitor suspends the warehouse at 20 credits rather than
+    merely emailing.
+  - scripts/publish_extracts_to_lake.py exports the LLM extraction table to
+    both landing zones. The direction is reversed from ingest on purpose:
+    extraction is incremental and its authoritative state is the BigQuery
+    MERGE target, so the whole table is exported per snapshot date.
+  - adzuna_pipeline/engines.py introduces one interface over BigQuery, Athena
+    and Snowflake; adzuna_pipeline/equivalence.py states each cross-engine
+    question in all three dialects; scripts/compare_engines.py runs them and
+    fails if any two disagree.
+
+Verifications passed
+  - All five equivalence checks agree across the three engines for
+    snapshot_date 2026-05-07: 4,704 raw rows / 3,975 distinct ids,
+    3,975 extract rows, Sydney 2,806 / Melbourne 1,102 / Brisbane 795 /
+    NULL 1, and AWS 107 / Azure 52 / Salesforce 47 skill mentions.
+  - Partition projection prunes: a query against an existing partition
+    scanned 1,497,121 bytes — exactly the three objects in it — while one
+    against a date with no objects scanned 0.
+  - Snowflake's LIST reports the same MD5s the reconciler does, confirming it
+    reads the same bytes rather than a re-encoded copy.
+  - Cost comparison over the same five questions: BigQuery scanned 618,900
+    bytes, Athena 3,171,347. The 5x gap is columnar storage against
+    row-oriented gzipped JSON, not a difference in the questions asked.
+
+Defects resolved
+  - gzip output was not reproducible. gzip.GzipFile stamps the current time
+    into its header, so identical content checksummed differently on every
+    run and "in sync" in the reconciler only ever meant "written in the same
+    run". build_payload now pins mtime=0.
+  - Every GCP location fallback in the repository named australia-southeast1
+    while the datasets live in australia-southeast2. Nothing was failing
+    because the real .env set the value explicitly, which is what made it
+    worth fixing before it mattered.
+  - Trino raises on out-of-range array subscripts where BigQuery and
+    Snowflake return NULL, and indexes from 1 rather than 0. One national
+    posting with location.area = ["Australia"] failed whole Athena queries
+    until they were switched to element_at.
+  - stg_adzuna__jobs referenced seeds via source() rather than ref(), so dbt
+    had no DAG edge and tested them mid-reload.
+
+Refactor pass — architecture cleanup
+  - Deleted scripts/sync_bq_to_snowflake.py (230 lines, unreachable once the
+    external stage replaced it) and the RuntimeSettings class, which no
+    caller ever constructed.
+  - DASHSCOPE_BASE_URL and JUDGE_MODEL were read by os.getenv at their call
+    sites while the rest of the configuration went through settings classes.
+    Both moved into DashScopeSettings, making that module the only thing in
+    the package that reads the environment.
+  - Six copies of _configure_logging and nine copies of the project-root
+    boilerplate collapsed into adzuna_pipeline/cli.py.
+  - Athena submit-poll-fetch was written twice inside apply_athena_ddl.py;
+    it now lives once, in the engines module.
+  - The .env.example test gained a reverse direction: a documented variable
+    that no code reads now fails, which is how the two dead ones above were
+    found. Warehouse SQL in snowflake/ gained the structural tests aws/glue/
+    already had.
+
+Changes
+  Added
+    - adzuna_pipeline/{engines.py, equivalence.py, cli.py}
+    - scripts/{compare_engines.py, apply_athena_ddl.py, sync_gcs_to_s3.py,
+      publish_extracts_to_lake.py}
+    - aws/glue/*.sql, aws/README.md
+    - snowflake/*.sql, snowflake/README.md
+    - docs/adr/0002-multi-cloud-architecture.md
+    - tests/{test_warehouse_sql_files.py,
+      test_env_example_documents_settings.py,
+      test_landing_zone_reconciliation.py}
+  Changed
+    - adzuna_pipeline/storage.py: RawPayload, build_payload, the RawUploader
+      protocol, S3RawUploader, and gzip mtime=0.
+    - adzuna_pipeline/config.py: AwsSettings; DashScope base URL and judge
+      model; RuntimeSettings removed.
+    - scripts/ingest_adzuna.py: dual write, --skip-s3, tiered exit codes.
+    - README.md: the AWS path, CI/CD, and the cloud identity model.
+  Removed
+    - scripts/sync_bq_to_snowflake.py
+    - scripts/verify/day5_marts_check.{py,sql} and superseded screenshots
+
+==============================================================================
+
+
 [2026-06-17]  v0.10.1 — Fix seed/staging build ordering exposed by CD
 ------------------------------------------------------------------------------
 

@@ -19,7 +19,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+from adzuna_pipeline.cli import PROJECT_ROOT
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 ADZUNA_BASE: Final[str] = "https://api.adzuna.com/v1/api/jobs"

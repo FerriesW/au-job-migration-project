@@ -18,7 +18,6 @@ import logging
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 from typing import Any, Final
 
 import typer
@@ -27,7 +26,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+from adzuna_pipeline.cli import PROJECT_ROOT, configure_logging
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Module imports must follow load_dotenv so config classes pick up env values.
@@ -69,15 +69,6 @@ class Comparison:
     @property
     def needs_copy(self) -> bool:
         return self.action is not Action.IN_SYNC
-
-
-def _configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    )
-    for noisy in ("botocore", "urllib3", "google.auth"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def _gcs_md5_hex(blob: Any) -> str:
@@ -190,7 +181,7 @@ def main(
     log_level: str = typer.Option("INFO", help="Logging level."),
 ) -> None:
     """Copy every GCS object missing from — or differing in — S3."""
-    _configure_logging(log_level)
+    configure_logging(log_level)
     gcp, aws = get_gcp(), get_aws()
 
     console.print(

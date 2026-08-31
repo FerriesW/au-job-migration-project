@@ -48,10 +48,10 @@ verify-adzuna = "scripts.verify_adzuna_source:app"
 ingest-adzuna = "scripts.ingest_adzuna:app"
 extract-llm-signals = "scripts.extract_llm_signals:app"
 evaluate-extraction = "scripts.evaluate_extraction:app"
-sync-bq-to-snowflake = "scripts.sync_bq_to_snowflake:app"
 sync-gcs-to-s3 = "scripts.sync_gcs_to_s3:app"
 apply-athena-ddl = "scripts.apply_athena_ddl:app"
 publish-extracts = "scripts.publish_extracts_to_lake:app"
+compare-engines = "scripts.compare_engines:app"
 
 [build-system]
 requires = ["hatchling"]
