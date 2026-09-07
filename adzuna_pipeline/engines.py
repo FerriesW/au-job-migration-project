@@ -115,7 +115,17 @@ class BigQueryEngine:
         return "bigquery"
 
     def run(self, sql: str) -> QueryResult:
-        job = self._client.query(sql)
+        from google.cloud import bigquery  # noqa: PLC0415
+
+        # The result cache is disabled deliberately. BigQuery serves a repeated
+        # identical query from cache and reports zero bytes processed, which
+        # silently turns a cost comparison into a measurement of how recently
+        # the same question was asked. Athena and Snowflake are not being asked
+        # to serve from cache here either, so this keeps the three comparable.
+        job = self._client.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(use_query_cache=False),
+        )
         rows = [tuple(normalise(v) for v in row.values()) for row in job.result()]
         return QueryResult(
             rows=rows,

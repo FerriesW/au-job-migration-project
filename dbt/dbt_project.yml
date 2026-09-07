@@ -15,23 +15,43 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# The BigQuery tree and the Snowflake tree are independent model sets over the
+# same data (ADR-0002), not one portable set. Each path is switched on only for
+# its own warehouse, so `dbt build` against either target sees only the models
+# written for it. This is selection, not portability: no model's SQL branches on
+# the target.
 models:
   au_jobs_radar:
     +persist_docs:
       relation: true
       columns: true
     staging:
+      +enabled: "{{ target.type == 'bigquery' }}"
       +materialized: view
       +schema: staging
     intermediate:
+      +enabled: "{{ target.type == 'bigquery' }}"
       +materialized: table
       +schema: staging
     marts:
+      +enabled: "{{ target.type == 'bigquery' }}"
       +materialized: table
       +schema: marts
+    snowflake:
+      +enabled: "{{ target.type == 'snowflake' }}"
+      staging:
+        +materialized: view
+        +schema: staging
+      marts:
+        +materialized: table
+        +schema: marts
 
+# The seeds are ANZSCO reference data used only by the BigQuery marts. The
+# Snowflake slice deliberately stops short of those marts, so loading them
+# there would be four CSVs of dead weight.
 seeds:
   au_jobs_radar:
+    +enabled: "{{ target.type == 'bigquery' }}"
     +schema: raw
     +quote_columns: false
     occupation_lists:

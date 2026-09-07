@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: snowflake_raw
+    description: >
+      VARIANT landing tables loaded from the S3 external stage by
+      snowflake/04 and snowflake/05. Distinct from the BigQuery `raw` source:
+      the same postings, but stored whole rather than shredded into columns.
+    database: AU_JOBS_RADAR
+    schema: RAW
+    tables:
+      - name: adzuna_jobs
+        identifier: ADZUNA_JOBS
+        description: One row per Adzuna posting, the payload untouched in a VARIANT.
+        columns:
+          - name: payload
+            description: The complete Adzuna record, including fields nothing has declared.
+          - name: snapshot_date
+            description: Partition date, lifted out and typed so predicates stay sargable.
+      - name: adzuna_llm_extract
+        identifier: ADZUNA_LLM_EXTRACT
+        description: One row per extracted posting, exported from the BigQuery MERGE target.
+        columns:
+          - name: payload
+            description: Skills, sponsorship signal and experience requirements, as VARIANT.
+          - name: job_id
+            description: Join key, lifted out and typed.

@@ -146,6 +146,61 @@ CHECKS: Final[tuple[EquivalenceCheck, ...]] = (
         """,
     ),
     EquivalenceCheck(
+        name="skills-demand mart, reached three different ways",
+        why=(
+            "The strongest check here, because the three sides do not share a "
+            "lineage. BigQuery's mart is built through int_jobs_enriched and "
+            "int_jobs_anzsco_mapped, including a join to the ANZSCO title "
+            "patterns; Snowflake's joins its two staging views directly; the "
+            "Athena side recomputes the whole thing inline from the two Glue "
+            "tables. Agreement is therefore evidence about the modelling, not "
+            "just about the load. Note the Athena spelling filters to one "
+            "snapshot while the two marts are single-snapshot by construction "
+            "— a second snapshot landing will break this check, which is the "
+            "correct moment to give the marts a snapshot dimension."
+        ),
+        bigquery="""
+            select state, skill, mention_count
+            from `{project}.marts.fct_skills_demand`
+            order by state, skill
+        """,
+        athena=f"""
+            with deduped as (
+                select id, location, snapshot_date, source_city,
+                       row_number() over (
+                           partition by id, snapshot_date order by source_city
+                       ) as rn
+                from au_jobs_radar.adzuna_jobs
+                where snapshot_date = '{SNAPSHOT}'
+            ),
+            jobs as (
+                select id, snapshot_date, source_city,
+                       element_at(location.area, 2) as state
+                from deduped where rn = 1
+            ),
+            joined as (
+                select j.state, j.source_city, e.required_skills
+                from jobs j
+                join au_jobs_radar.adzuna_llm_extract e
+                  on e.job_id = j.id and e.snapshot_date = j.snapshot_date
+                where j.state is not null
+                  and e.extraction_status = 'ok'
+                  and e.snapshot_date = '{SNAPSHOT}'
+            )
+            select state, lower(trim(s)) as skill, count(*) as mention_count
+            from joined cross join unnest(required_skills) as t(s)
+            where length(trim(s)) > 0
+            group by state, lower(trim(s))
+            having count(*) >= 3
+            order by state, 2
+        """,
+        snowflake="""
+            select state, skill, mention_count
+            from AU_JOBS_RADAR.MARTS.FCT_SF__SKILLS_DEMAND
+            order by state, skill
+        """,
+    ),
+    EquivalenceCheck(
         name="sponsorship signal breakdown",
         why="A plain categorical aggregate, included as a control on the harder checks.",
         bigquery=f"""

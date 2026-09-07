@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: stg_sf__adzuna_jobs
+    description: >
+      Adzuna postings shredded out of the VARIANT payload at read time,
+      deduplicated on (job_id, snapshot_date). One row per posting per snapshot.
+    columns:
+      - name: job_id
+        description: Adzuna posting identifier.
+        tests: [not_null]
+      - name: snapshot_date
+        description: Ingestion partition date.
+        tests: [not_null]
+      - name: country
+        description: >
+          First element of location.area. Every posting in this dataset is
+          Australian, so a second value here means the ingest query changed.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Australia']
+
+  - name: stg_sf__llm_extract
+    description: >
+      Successful LLM extractions, with required_skills left as an ARRAY for
+      consumers that want the wider grain to flatten it themselves.
+    columns:
+      - name: job_id
+        tests: [not_null]
+      - name: sponsorship_signal
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['explicit_yes', 'explicit_no', 'unspecified']
+      - name: remote_friendly
+        description: >
+          Work-mode disposition. The vocabulary is remote/hybrid/onsite, not
+          yes/no — it describes where the work happens, not whether remote is
+          permitted.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['remote', 'hybrid', 'onsite', 'unspecified']
+      - name: skills_count
+        description: Array length, so a silently empty extraction is visible as zero.
+
+  - name: fct_sf__skills_demand
+    description: >
+      Skill mentions per state, above a floor of three, produced with LATERAL
+      FLATTEN over an array no schema declares.
+    columns:
+      - name: state
+        tests: [not_null]
+      - name: skill
+        tests: [not_null]
+      - name: mention_count
+        description: Never below three by construction; the test is on the floor holding.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 3
+                inclusive: true

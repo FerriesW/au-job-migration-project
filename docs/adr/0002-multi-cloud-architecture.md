@@ -17,8 +17,17 @@ existing GCP path, rather than making one dbt project run on several warehouses.
 - **Snowflake (new):** hosted on **AWS, ap-southeast-2**, reading the same S3
   prefix through a `STORAGE INTEGRATION` + `EXTERNAL STAGE`. Its raw layer is
   written **natively against `VARIANT`** — it is not a port of the BigQuery
-  models, and there is **no `{% if target.type %}` branching and no
-  `adapter.dispatch` macro layer** anywhere in the dbt project.
+  models, and **no model's SQL branches on `target.type`, and there is no
+  `adapter.dispatch` macro layer**, anywhere in the dbt project.
+
+  That prohibition is about *portability*: making one model produce the right
+  SQL for whichever warehouse it lands on. It does not extend to *selection* —
+  deciding which models exist on which warehouse. The two model trees live in
+  separate paths and each is switched on by `+enabled` in `dbt_project.yml`,
+  which is one line of configuration per path rather than a branch inside any
+  model. Without it, `dbt build --target dev` would try to run the Snowflake
+  models against BigQuery; the alternative of remembering a `--select` flag
+  every time is a convention, not a guardrail.
 
 **Build order is fixed:** AWS minimal set (S3 + IAM role + Glue DDL + Athena)
 → *then* create the Snowflake account → *then*, optionally, serverless ingest

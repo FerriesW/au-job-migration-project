@@ -18,11 +18,43 @@ type rather than a schema you have to declare in advance.
 
 ```
 01_account_objects.sql      warehouse, database, schemas, DBT_ROLE, DBT_USER, resource monitor
+
 02_storage_integration.sql  trust with AWS — two passes, see the file header
 03_stage_and_format.sql     external stage over s3://au-jobs-radar-raw/adzuna/
 04_raw_variant_table.sql    VARIANT landing table + COPY INTO + equivalence check
 05_llm_extract.sql          second stage and VARIANT table for the LLM extracts
 ```
+
+## The dbt models
+
+`dbt/models/snowflake/` holds three models, run with `--target dev_sf`:
+
+| Model | What it does |
+|---|---|
+| `stg_sf__adzuna_jobs` | Shreds the VARIANT payload into columns at read time |
+| `stg_sf__llm_extract` | Same, keeping `required_skills` as an ARRAY |
+| `fct_sf__skills_demand` | `LATERAL FLATTEN` over that array, joined to the postings |
+
+They are **not ports** of the BigQuery models. The BigQuery tree reads tables
+whose columns the warehouse already knows; these do the shredding themselves,
+from a record nothing declared.
+
+The two trees are kept apart by `+enabled` in `dbt_project.yml`, one line per
+path, so `dbt build` against either target sees only the models written for it.
+That is selection, not portability — no model's SQL branches on the target,
+which is the thing ADR-0002 actually forbids.
+
+The slice stops at one mart on purpose. `dim_occupation` and the two
+supply-demand facts depend on four ANZSCO seed files; carrying those across
+would demonstrate nothing Snowflake-specific and would put four CSVs of dead
+weight in the account.
+
+**The two marts agree exactly — 117 rows, identical — despite unrelated
+lineages.** BigQuery's is built through `int_jobs_enriched` and
+`int_jobs_anzsco_mapped`, including a join to the ANZSCO title patterns;
+Snowflake's joins its two staging views directly. That agreement is evidence
+about the modelling, not just about the load, and
+`scripts/compare_engines.py` now guards it.
 
 01 and 02 run as `ACCOUNTADMIN` in a Snowsight worksheet; 03 to 05 run as
 `DBT_ROLE`. 05 has an `ACCOUNTADMIN` prerequisite in its header: the storage
@@ -102,20 +134,33 @@ non-zero if any two disagree; the questions live in
 
 ### What the same questions cost
 
-Over those five checks, run 2026-08-24:
+Over the six checks, run 2026-08-31:
 
-| Engine | Bytes scanned | Billing model |
+| Engine | Reported | Billing model |
 |---|---|---|
-| BigQuery | 618,900 | per byte scanned, 1 TiB/month free |
-| Athena | 3,171,347 | per byte scanned, $5/TB, 10 MB minimum per query |
-| Snowflake | not exposed per query | per credit-second of warehouse uptime |
+| BigQuery | 622,713 bytes scanned | per byte scanned, 1 TiB/month free |
+| Athena | 4,727,503 bytes scanned | per byte scanned, $5/TB, 10 MB minimum per query |
+| Snowflake | 5.7s of query time | per credit-second of warehouse uptime, not per byte |
 
-Athena reads five times as much for identical answers. That is the storage
+Athena reads **7.6× as much** for identical answers. That is the storage
 format, not the question: BigQuery reads only the columns a query names, while
-Athena has to decompress and parse the whole JSON object every time. It is the
+Athena decompresses and parses the whole JSON object every time. It is the
 clearest argument in this project for converting a landing zone to Parquet
-before anyone queries it seriously — and the reason the difference is worth
-measuring rather than assuming.
+before anyone queries it seriously.
+
+Two things had to be got right for that number to mean anything:
+
+- **BigQuery's result cache is disabled in the engine.** A repeated identical
+  query is served from cache and reports zero bytes, which quietly turns a cost
+  comparison into a measurement of how recently the same question was asked.
+  The first version of this table was measuring a warm cache.
+- **Snowflake cannot be compared on the same axis at all**, which is the point
+  rather than a gap in the data. The full `dbt build` — three models and eleven
+  tests — takes 5.7 seconds of query time, but `AUTO_SUSPEND = 60` means it
+  bills roughly 66 seconds of warehouse uptime. You pay for the idle timeout,
+  not the work. That rewards batching and punishes sporadic small queries,
+  which is the exact opposite of Athena's incentive, where a 10 MB minimum
+  charge per query rewards asking rarely and reading widely.
 
 ### Same array, three idioms
 
