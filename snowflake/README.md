@@ -140,7 +140,27 @@ Over the six checks, run 2026-08-31:
 |---|---|---|
 | BigQuery | 622,713 bytes scanned | per byte scanned, 1 TiB/month free |
 | Athena | 4,727,503 bytes scanned | per byte scanned, $5/TB, 10 MB minimum per query |
-| Snowflake | 5.7s of query time | per credit-second of warehouse uptime, not per byte |
+| Snowflake | **1.0137 credits, whole track** | per credit-second of warehouse uptime, not per byte |
+
+The Snowflake figure is not for those six queries — it is everything: creating
+the account, loading both landing tables, every `dbt build`, and every repeat of
+the equivalence checks across three weeks. Against a $400 trial allowance, that
+is roughly a quarter of one percent.
+
+Metering landed on **six days out of twenty-three**. The warehouse was asleep
+for the rest, which is `AUTO_SUSPEND = 60` doing exactly what it was set to do:
+
+```
+2026-08-17  0.1275   account bootstrap, first COPY INTO
+2026-08-23  0.1259   extract stage and second landing table
+2026-08-30  0.1172   dbt models, first build
+2026-08-31  0.3654   model iteration and repeated equivalence runs
+2026-09-06  0.2777   mart-level check added, cost re-measured
+2026-09-09  0.0000   below the rounding floor
+```
+
+Exported live from `ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY`; the raw CSV is in
+`debug/evidence-20260907/`.
 
 Athena reads **7.6× as much** for identical answers. That is the storage
 format, not the question: BigQuery reads only the columns a query names, while

@@ -63,6 +63,10 @@ data/samples/
 *.parquet
 !data/samples/README.md
 !dbt/seeds/*.csv
+# Query results exported from a console as evidence. Tracked deliberately:
+# these are records of what a warehouse reported on a date, not pipeline data,
+# and some describe accounts that will not exist later.
+!debug/evidence-*/*.csv
 !dbt/seeds/README.md
 
 # IDE / OS

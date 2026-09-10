@@ -1,43 +1,61 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snowflake trial evidence — 2026-09-07</title>
+<title>Snowflake trial evidence - 2026-09-07</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<style>.card{background:#111827;border:1px solid #1f2937}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}</style>
+<style>.card{background:#111827;border:1px solid #1f2937}.mono,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}</style>
 </head><body class="bg-gray-950 text-gray-200 antialiased">
 <header class="max-w-5xl mx-auto px-6 pt-10 pb-6">
-  <p class="text-sm uppercase tracking-widest text-gray-500">Evidence capture · 2026-09-07</p>
+  <p class="text-sm uppercase tracking-widest text-gray-500">Evidence capture &middot; 2026-09-07 and 09-10</p>
   <h1 class="text-3xl font-bold text-white mt-2">Multi-cloud pipeline, verified end to end</h1>
   <p class="mt-3 text-gray-400 max-w-3xl">
     The Snowflake trial expires <strong class="text-amber-300">2026-09-17</strong>. Everything below was
-    captured while all three warehouses were live. The output is embedded verbatim from
-    <span class="mono text-sky-300">debug/evidence-20260907/*.log</span> — not retyped.
+    captured while all three warehouses were live: logs embedded verbatim from
+    <span class="mono text-sky-300">debug/evidence-20260907/</span>, console exports rendered from the CSVs
+    beside them. Nothing here is retyped.
   </p>
   <div class="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
     <div class="card rounded-lg p-3"><div class="text-2xl font-bold text-emerald-400">6/6</div><div class="text-xs text-gray-400">equivalence checks agree</div></div>
     <div class="card rounded-lg p-3"><div class="text-2xl font-bold text-emerald-400">14/14</div><div class="text-xs text-gray-400">Snowflake dbt tests</div></div>
     <div class="card rounded-lg p-3"><div class="text-2xl font-bold text-emerald-400">63/63</div><div class="text-xs text-gray-400">BigQuery dbt tests</div></div>
-    <div class="card rounded-lg p-3"><div class="text-2xl font-bold text-emerald-400">4/4</div><div class="text-xs text-gray-400">landing-zone objects in sync</div></div>
+    <div class="card rounded-lg p-3"><div class="text-2xl font-bold text-sky-400">1.01</div><div class="text-xs text-gray-400">Snowflake credits, whole track</div></div>
   </div>
 </header>
 <main class="max-w-5xl mx-auto px-6 pb-16 space-y-6">
+
 <section class="card rounded-xl p-5">
-  <h2 class="text-lg font-bold text-white">The one number worth remembering</h2>
-  <p class="mt-2 text-gray-300 text-sm">
-    Over the same six questions, BigQuery scanned <strong class="text-white">622,713 bytes</strong> and Athena
-    <strong class="text-white">4,727,503</strong> — 7.6&times; more for identical answers. That is storage format,
-    not workload: BigQuery reads only the columns a query names, Athena decompresses and parses whole JSON objects.
-    Snowflake cannot be placed on that axis at all — a 5.7-second build bills roughly 66 seconds of warehouse
-    uptime because <span class="mono">AUTO_SUSPEND = 60</span>. You pay for the idle timeout, not the work.
+  <h2 class="text-lg font-bold text-white">What the three engines cost</h2>
+  <table class="w-full text-sm mt-3">
+    <thead class="text-gray-400 text-left"><tr><th class="py-1">Engine</th><th>Reported</th><th>Billing model</th></tr></thead>
+    <tbody class="text-gray-300">
+      <tr class="border-t border-gray-800"><td class="py-1.5">BigQuery</td><td class="mono">622,713 bytes</td><td class="text-gray-400">per byte scanned, 1 TiB/month free</td></tr>
+      <tr class="border-t border-gray-800"><td class="py-1.5">Athena</td><td class="mono">4,727,503 bytes</td><td class="text-gray-400">per byte scanned, $5/TB, 10 MB minimum</td></tr>
+      <tr class="border-t border-gray-800"><td class="py-1.5">Snowflake</td><td class="mono">1.0137 credits</td><td class="text-gray-400">per credit-second of warehouse uptime</td></tr>
+    </tbody>
+  </table>
+  <p class="mt-3 text-gray-300 text-sm">
+    Athena reads <strong class="text-white">7.6x</strong> the bytes for identical answers - storage format,
+    not workload: BigQuery reads only the columns a query names, Athena decompresses whole JSON objects.
+    Snowflake is not on that axis at all. <strong class="text-white">1.01 credits covered the entire
+    track</strong> - building the account, loading the data, every dbt run and every repeat of the
+    equivalence checks - against a $400 trial allowance. Billing landed on only 6 days out of
+    roughly three weeks, because <span class="mono">AUTO_SUSPEND = 60</span> puts the warehouse to sleep a
+    minute after the last query.
   </p>
+  <div class="mt-4 space-y-1.5"><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">2026-08-17</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-sky-500" style="width:34.9%"></div></div><span class="mono w-16 text-right text-gray-300">0.1275</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">2026-08-23</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-sky-500" style="width:34.5%"></div></div><span class="mono w-16 text-right text-gray-300">0.1259</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">2026-08-30</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-sky-500" style="width:32.1%"></div></div><span class="mono w-16 text-right text-gray-300">0.1172</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">2026-08-31</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-sky-500" style="width:100.0%"></div></div><span class="mono w-16 text-right text-gray-300">0.3654</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">2026-09-06</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-sky-500" style="width:76.0%"></div></div><span class="mono w-16 text-right text-gray-300">0.2777</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">2026-09-09</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-sky-500" style="width:0.0%"></div></div><span class="mono w-16 text-right text-gray-300">0.0000</span></div></div>
 </section>
 
-<section class="card rounded-xl overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-800">
-    <h2 class="text-xl font-bold text-white">Cross-engine equivalence</h2>
-    <p class="mono text-xs text-sky-300 mt-1">compare-engines</p>
-    <p class="text-sm text-gray-400 mt-2">Six questions, each asked of BigQuery, Athena and Snowflake in its own dialect. The last one compares the skills-demand marts, whose three sides do not share a lineage.</p>
-  </div>
-  <pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">+-----------------------------------------------+
+<section class="card rounded-xl p-5">
+  <h2 class="text-lg font-bold text-white">Skills, read out of a VARIANT nothing declared</h2>
+  <p class="mt-2 text-gray-400 text-sm">
+    Rendered from <span class="mono text-sky-300">09-snowsight-skills.csv</span> rather than pasted as a
+    picture, so it stays checkable. Platform and CRM skills outrank programming languages: Australian
+    employers advertise the systems they run more often than the languages they use.
+  </p>
+  <div class="mt-4 space-y-1.5"><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">AWS</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:100.0%"></div></div><span class="mono w-16 text-right text-gray-300">107</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">Azure</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:48.6%"></div></div><span class="mono w-16 text-right text-gray-300">52</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">Salesforce</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:43.9%"></div></div><span class="mono w-16 text-right text-gray-300">47</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">SAP</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:24.3%"></div></div><span class="mono w-16 text-right text-gray-300">26</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">Java</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:21.5%"></div></div><span class="mono w-16 text-right text-gray-300">23</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">AI</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:21.5%"></div></div><span class="mono w-16 text-right text-gray-300">23</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">Python</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:19.6%"></div></div><span class="mono w-16 text-right text-gray-300">21</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">React</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:16.8%"></div></div><span class="mono w-16 text-right text-gray-300">18</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">SQL</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:15.9%"></div></div><span class="mono w-16 text-right text-gray-300">17</span></div><div class="flex items-center gap-3 text-xs"><span class="mono text-gray-400 w-24 text-right">Microsoft</span><div class="flex-1 bg-gray-800 rounded h-4 overflow-hidden"><div class="h-full bg-violet-500" style="width:15.9%"></div></div><span class="mono w-16 text-right text-gray-300">17</span></div></div>
+</section>
+
+<section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">External stages</h2><p class="mono text-xs text-sky-300 mt-1">07-snowsight-stages.csv</p><p class="text-sm text-gray-400 mt-2">The strongest single artefact here: Snowflake is reading <em>your</em> S3 prefixes through a storage integration, in the same region. Not a copy that was uploaded to it.</p></div><div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-black/30"><tr><th class="text-left px-3 py-1.5 font-semibold text-gray-300">created_on</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">name</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">database_name</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">schema_name</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">url</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">has_credentials</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">has_encryption_key</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">owner</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">comment</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">region</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">type</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">cloud</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">notification_channel</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">storage_integration</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">endpoint</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">owner_role_type</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">directory_enabled</th></tr></thead><tbody><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">2026-08-17 23:11:10.105 -0700</td><td class="px-3 py-1 text-gray-400 mono">S3_ADZUNA</td><td class="px-3 py-1 text-gray-400 mono">AU_JOBS_RADAR</td><td class="px-3 py-1 text-gray-400 mono">RAW</td><td class="px-3 py-1 text-gray-400 mono">s3://au-jobs-radar-raw/adzuna/</td><td class="px-3 py-1 text-gray-400 mono">N</td><td class="px-3 py-1 text-gray-400 mono">N</td><td class="px-3 py-1 text-gray-400 mono">DBT_ROLE</td><td class="px-3 py-1 text-gray-400 mono">-</td><td class="px-3 py-1 text-gray-400 mono">ap-southeast-2</td><td class="px-3 py-1 text-gray-400 mono">EXTERNAL</td><td class="px-3 py-1 text-gray-400 mono">AWS</td><td class="px-3 py-1 text-gray-400 mono">-</td><td class="px-3 py-1 text-gray-400 mono">AU_JOBS_RADAR_S3</td><td class="px-3 py-1 text-gray-400 mono">-</td><td class="px-3 py-1 text-gray-400 mono">ROLE</td><td class="px-3 py-1 text-gray-400 mono">N</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">2026-08-23 22:21:54.862 -0700</td><td class="px-3 py-1 text-gray-400 mono">S3_LLM_EXTRACT</td><td class="px-3 py-1 text-gray-400 mono">AU_JOBS_RADAR</td><td class="px-3 py-1 text-gray-400 mono">RAW</td><td class="px-3 py-1 text-gray-400 mono">s3://au-jobs-radar-raw/adzuna_llm_extract/</td><td class="px-3 py-1 text-gray-400 mono">N</td><td class="px-3 py-1 text-gray-400 mono">N</td><td class="px-3 py-1 text-gray-400 mono">DBT_ROLE</td><td class="px-3 py-1 text-gray-400 mono">-</td><td class="px-3 py-1 text-gray-400 mono">ap-southeast-2</td><td class="px-3 py-1 text-gray-400 mono">EXTERNAL</td><td class="px-3 py-1 text-gray-400 mono">AWS</td><td class="px-3 py-1 text-gray-400 mono">-</td><td class="px-3 py-1 text-gray-400 mono">AU_JOBS_RADAR_S3</td><td class="px-3 py-1 text-gray-400 mono">-</td><td class="px-3 py-1 text-gray-400 mono">ROLE</td><td class="px-3 py-1 text-gray-400 mono">N</td></tr></tbody></table></div></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">Objects and row counts</h2><p class="mono text-xs text-sky-300 mt-1">08-snowsight-tables.csv</p><p class="text-sm text-gray-400 mt-2">The two staging models are views, so they report no row count. That is correct, not missing data.</p></div><div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-black/30"><tr><th class="text-left px-3 py-1.5 font-semibold text-gray-300">TABLE_SCHEMA</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">TABLE_NAME</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">ROW_COUNT</th></tr></thead><tbody><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">MARTS</td><td class="px-3 py-1 text-gray-400 mono">FCT_SF__SKILLS_DEMAND</td><td class="px-3 py-1 text-gray-400 mono">117</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">RAW</td><td class="px-3 py-1 text-gray-400 mono">ADZUNA_JOBS</td><td class="px-3 py-1 text-gray-400 mono">4704</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">RAW</td><td class="px-3 py-1 text-gray-400 mono">ADZUNA_LLM_EXTRACT</td><td class="px-3 py-1 text-gray-400 mono">3975</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">STAGING</td><td class="px-3 py-1 text-gray-400 mono">STG_SF__ADZUNA_JOBS</td><td class="px-3 py-1 text-gray-400 mono">-</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">STAGING</td><td class="px-3 py-1 text-gray-400 mono">STG_SF__LLM_EXTRACT</td><td class="px-3 py-1 text-gray-400 mono">-</td></tr></tbody></table></div></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">Skills, via LATERAL FLATTEN over a VARIANT</h2><p class="mono text-xs text-sky-300 mt-1">09-snowsight-skills.csv</p><p class="text-sm text-gray-400 mt-2">Produced by reaching into an array no schema declares. BigQuery and Athena reach the same numbers with UNNEST over a column that had to be declared first.</p></div><div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-black/30"><tr><th class="text-left px-3 py-1.5 font-semibold text-gray-300">SKILL</th><th class="text-left px-3 py-1.5 font-semibold text-gray-300">MENTIONS</th></tr></thead><tbody><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">AWS</td><td class="px-3 py-1 text-gray-400 mono">107</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">Azure</td><td class="px-3 py-1 text-gray-400 mono">52</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">Salesforce</td><td class="px-3 py-1 text-gray-400 mono">47</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">SAP</td><td class="px-3 py-1 text-gray-400 mono">26</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">Java</td><td class="px-3 py-1 text-gray-400 mono">23</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">AI</td><td class="px-3 py-1 text-gray-400 mono">23</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">Python</td><td class="px-3 py-1 text-gray-400 mono">21</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">React</td><td class="px-3 py-1 text-gray-400 mono">18</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">SQL</td><td class="px-3 py-1 text-gray-400 mono">17</td></tr><tr class="border-t border-gray-800"><td class="px-3 py-1 text-gray-400 mono">Microsoft</td><td class="px-3 py-1 text-gray-400 mono">17</td></tr></tbody></table></div></section>
+<section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">Cross-engine equivalence</h2><p class="mono text-xs text-sky-300 mt-1">compare_engines.py</p><p class="text-sm text-gray-400 mt-2">Six questions, each asked of BigQuery, Athena and Snowflake in its own dialect. The last compares the skills-demand marts, whose three sides share no lineage.</p></div><pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">+-----------------------------------------------+
 | Cross-engine equivalence                      |
 | checks=6  engines=bigquery, athena, snowflake |
 +-----------------------------------------------+
@@ -77,15 +95,7 @@
 +-----------------------------------------------------------------------------+
 +----------------------------------------------+
 | All 6 checks agree across the three engines. |
-+----------------------------------------------+</pre>
-</section>
-<section class="card rounded-xl overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-800">
-    <h2 class="text-xl font-bold text-white">dbt build — Snowflake</h2>
-    <p class="mono text-xs text-sky-300 mt-1">dbt build --target dev_sf</p>
-    <p class="text-sm text-gray-400 mt-2">Three models over the VARIANT landing tables, plus eleven data tests.</p>
-  </div>
-  <pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">[0m05:25:50  Running with dbt=1.11.8
++----------------------------------------------+</pre></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">dbt build - Snowflake</h2><p class="mono text-xs text-sky-300 mt-1">dbt build --target dev_sf</p><p class="text-sm text-gray-400 mt-2">Three models over the VARIANT landing tables, plus eleven data tests.</p></div><pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">[0m05:25:50  Running with dbt=1.11.8
 [0m05:25:50  Registered adapter: snowflake=1.11.5
 [0m05:25:51  Unable to do partial parsing because config vars, config profile, or config target have changed
 [0m05:25:51  Unable to do partial parsing because profile has changed
@@ -127,15 +137,7 @@
 [0m05:25:59  
 [0m05:25:59  [32mCompleted successfully[0m
 [0m05:25:59  
-[0m05:25:59  Done. PASS=14 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=14</pre>
-</section>
-<section class="card rounded-xl overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-800">
-    <h2 class="text-xl font-bold text-white">dbt build — BigQuery</h2>
-    <p class="mono text-xs text-sky-300 mt-1">dbt build --target dev</p>
-    <p class="text-sm text-gray-400 mt-2">The production path, rebuilt end to end to prove the +enabled isolation did not break it.</p>
-  </div>
-  <pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">[0m05:26:02  Running with dbt=1.11.8
+[0m05:25:59  Done. PASS=14 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=14</pre></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">dbt build - BigQuery</h2><p class="mono text-xs text-sky-300 mt-1">dbt build --target dev</p><p class="text-sm text-gray-400 mt-2">The production path, rebuilt end to end to prove the +enabled isolation did not break it.</p></div><pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">[0m05:26:02  Running with dbt=1.11.8
 [0m05:26:03  Registered adapter: bigquery=1.11.1
 [0m05:26:03  Unable to do partial parsing because config vars, config profile, or config target have changed
 [0m05:26:03  Unable to do partial parsing because profile has changed
@@ -275,15 +277,7 @@
 [0m05:26:50  
 [0m05:26:50  [32mCompleted successfully[0m
 [0m05:26:50  
-[0m05:26:50  Done. PASS=63 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=63</pre>
-</section>
-<section class="card rounded-xl overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-800">
-    <h2 class="text-xl font-bold text-white">Landing-zone mirrors</h2>
-    <p class="mono text-xs text-sky-300 mt-1">sync_gcs_to_s3.py --dry-run</p>
-    <p class="text-sm text-gray-400 mt-2">GCS and S3 compared by MD5, not by presence. Nothing to copy means the mirrors are byte-identical.</p>
-  </div>
-  <pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">+-----------------------------------------------------------------------------+
+[0m05:26:50  Done. PASS=63 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=63</pre></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">Landing-zone mirrors</h2><p class="mono text-xs text-sky-300 mt-1">sync_gcs_to_s3.py --dry-run</p><p class="text-sm text-gray-400 mt-2">GCS and S3 compared by MD5. Nothing to copy means the mirrors are byte-identical.</p></div><pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">+-----------------------------------------------------------------------------+
 | Landing-zone reconciliation                                                 |
 | source=gs://au-jobs-radar-raw/  target=s3://au-jobs-radar-raw/              |
 | region=ap-southeast-2  dry_run=True                                         |
@@ -306,15 +300,7 @@
 +-----------------------------------------------------------------------------+
 +-------------------------------------------+
 | Dry run �� 0 of 4 objects would be copied. |
-+-------------------------------------------+</pre>
-</section>
-<section class="card rounded-xl overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-800">
-    <h2 class="text-xl font-bold text-white">Glue catalogue</h2>
-    <p class="mono text-xs text-sky-300 mt-1">apply_athena_ddl.py --verify</p>
-    <p class="text-sm text-gray-400 mt-2">The catalogue reapplied from versioned SQL, then row counts read back through Athena.</p>
-  </div>
-  <pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">+-----------------------------------------------------------------------------+
++-------------------------------------------+</pre></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">Glue catalogue</h2><p class="mono text-xs text-sky-300 mt-1">apply_athena_ddl.py --verify</p><p class="text-sm text-gray-400 mt-2">The catalogue reapplied from versioned SQL, then row counts read back through Athena.</p></div><pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">+-----------------------------------------------------------------------------+
 | Glue catalog DDL                                                            |
 | source=D:\Claude Project\au-job-migration-project\aws\glue  files=3         |
 | dry_run=False                                                               |
@@ -339,15 +325,7 @@ Verification �� rows per table and snapshot date
 +-------------------------------------------+
 +---------------------------------------------+
 | Applied 3 statement(s) to the Glue catalog. |
-+---------------------------------------------+</pre>
-</section>
-<section class="card rounded-xl overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-800">
-    <h2 class="text-xl font-bold text-white">Snowflake account</h2>
-    <p class="mono text-xs text-sky-300 mt-1">account facts</p>
-    <p class="text-sm text-gray-400 mt-2">What the trial account held on this date. After 2026-09-17 this is unrecoverable.</p>
-  </div>
-  <pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">=== account ===
++---------------------------------------------+</pre></section><section class="card rounded-xl overflow-hidden"><div class="px-6 py-4 border-b border-gray-800"><h2 class="text-xl font-bold text-white">Snowflake account</h2><p class="mono text-xs text-sky-300 mt-1">account facts</p><p class="text-sm text-gray-400 mt-2">What the trial account held on this date. After 2026-09-17 this is unrecoverable.</p></div><pre class="p-4 text-[11px] leading-tight overflow-x-auto text-gray-300 bg-black/40">=== account ===
   XU06234 | AWS_AP_SOUTHEAST_2 | 10.31.103 | COMPUTE_WH | DBT_ROLE
 
 === credits used per day ===
@@ -361,18 +339,17 @@ Verification �� rows per table and snapshot date
 
 === stages ===
   2026-08-17T23:11:10.105000-07:00 | S3_ADZUNA | AU_JOBS_RADAR | RAW | s3://au-jobs-radar-raw/adzuna/ | N | N | DBT_ROLE |  | ap-southeast-2 | EXTERNAL | AWS |  | AU_JOBS_RADAR_S3 |  | ROLE | N
-  2026-08-23T22:21:54.862000-07:00 | S3_LLM_EXTRACT | AU_JOBS_RADAR | RAW | s3://au-jobs-radar-raw/adzuna_llm_extract/ | N | N | DBT_ROLE |  | ap-southeast-2 | EXTERNAL | AWS |  | AU_JOBS_RADAR_S3 |  | ROLE | N</pre>
-</section>
+  2026-08-23T22:21:54.862000-07:00 | S3_LLM_EXTRACT | AU_JOBS_RADAR | RAW | s3://au-jobs-radar-raw/adzuna_llm_extract/ | N | N | DBT_ROLE |  | ap-southeast-2 | EXTERNAL | AWS |  | AU_JOBS_RADAR_S3 |  | ROLE | N</pre></section>
+
 <section class="card rounded-xl p-5">
-  <h2 class="text-lg font-bold text-white">Not captured</h2>
+  <h2 class="text-lg font-bold text-white">Method note</h2>
   <p class="mt-2 text-gray-300 text-sm">
-    Per-day credit consumption needs <span class="mono">MONITOR</span> on the warehouse, which
-    <span class="mono">DBT_ROLE</span> deliberately does not have. It is visible in Snowsight under
-    Admin → Cost Management while the account lives, or as ACCOUNTADMIN via
-    <span class="mono">warehouse_metering_history</span>. Recorded as absent rather than left looking like zero.
+    Console results were exported as CSV rather than screenshotted. A screenshot of a table is an image of
+    numbers; the CSV is the numbers, and this page renders them at read time, so a claim here can be checked
+    against the file next to it instead of being taken on trust.
   </p>
 </section>
 <footer class="text-center text-gray-600 text-xs pt-2">
-  Generated 2026-09-07 from the log files alongside this page.
+  Generated 2026-09-10 from the logs and CSVs alongside this page.
 </footer>
 </main></body></html>
