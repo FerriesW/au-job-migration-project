@@ -62,33 +62,61 @@ This project closes that information gap for the Visa Applicant view.
                      +-----+     +----------+     +--------------+     +----------+
                 +--> | GCS | --> | BigQuery | --> | dbt Core     | --> | Power BI |
                 |    +-----+     | raw      |     | staging      |     | report   |
-+-------------+ |                +----------+     | intermediate |     +----------+
-| Adzuna API  | |                                 | marts        |
-| Home Affairs|-+                                 +--------------+
-| DashScope   | |
-| (Qwen-Turbo)| |    +-----+     +----------+     +--------------+
-+-------------+ +--> | S3  | --> | Glue     | --> | Athena       |
-                     +-----+     | Catalog  |     | query-in-    |
-                                 +----------+     | place        |
-                                                  +--------------+
+                |                +----------+     | intermediate |     +----------+
++-------------+ |                                 | marts        |
+| Adzuna API  | |                                 +--------------+
+| Home Affairs|-+
+| DashScope   | |                +----------+     +--------------+
+| (Qwen-Turbo)| |           +--> | Glue     | --> | Athena       |
++-------------+ |    +-----+|    | Catalog  |     | query-in-    |
+                +--> | S3  |+    +----------+     | place        |
+                     +-----+|                     +--------------+
+                            |    +----------+     +--------------+
+                            +--> | external | --> | Snowflake    |
+                                 | stage    |     | VARIANT + dbt|
+                                 +----------+     +--------------+
 ```
 
 One ingestion run serialises each snapshot once and writes it to **two landing
 zones**, GCS and S3, which are byte-identical — same object key, same MD5. From
-there the paths diverge on purpose.
+there, three engines read the same data three different ways, on purpose.
 
-The **GCP path is production**: BigQuery loads from GCS, dbt builds the marts,
-Power BI reads them, and a monthly keyless-OIDC GitHub Actions job rebuilds the
-warehouse. The **AWS path queries the lake in place**: a hand-written Glue Data
-Catalog table sits over the same S3 objects and Athena reads them without ever
-loading the data, which is the architectural contrast worth having — warehouse
-versus lakehouse over one dataset.
+- **BigQuery is production.** It loads from GCS, dbt builds the marts, Power BI
+  reads them, and a monthly keyless-OIDC GitHub Actions job rebuilds the
+  warehouse. Schema is fixed at load time.
+- **Athena queries the lake in place.** A hand-written Glue Data Catalog table
+  sits over the S3 objects and Athena reads them without ever loading the data.
+  Schema is declared in DDL.
+- **Snowflake reads the same objects through an external stage** into a
+  `VARIANT` landing layer, with its own dbt models on top. Schema is deferred
+  to read time: a new field in the Adzuna payload is queryable immediately,
+  where the other two need a migration first.
 
-This is deliberately *not* one dbt project made portable across warehouses.
-[ADR-0002](docs/adr/0002-multi-cloud-architecture.md) records why that was
-considered and rejected; [`aws/README.md`](aws/README.md) covers the catalogue,
-the Trino/BigQuery dialect differences found while cross-checking, and the
-equivalence results between the two engines.
+This is deliberately *not* one dbt project made portable across warehouses —
+that would confine every model to the intersection of three dialects.
+[ADR-0002](docs/adr/0002-multi-cloud-architecture.md) records why portability
+was considered and rejected. [`aws/README.md`](aws/README.md) covers the Glue
+catalogue and the Trino dialect traps; [`snowflake/README.md`](snowflake/README.md)
+covers the VARIANT layer and the cost comparison.
+
+**The equivalence between them is executable, not asserted.**
+`scripts/compare_engines.py` asks all three the same six questions, each in its
+own dialect, and exits non-zero if any two disagree. The hardest check compares
+the skills-demand marts, whose three sides share no lineage — BigQuery builds
+through two intermediate models and an ANZSCO join, Snowflake joins its staging
+views directly, Athena recomputes inline — and all three return the same 117
+rows.
+
+Two things that only turned up by running all three rather than reading the
+documentation:
+
+- **Trino raises on an out-of-range array subscript** where BigQuery and
+  Snowflake return NULL, and indexes from 1 rather than 0. Exactly one posting
+  in 4,704 triggers it: a national role whose `location.area` is just
+  `["Australia"]`.
+- **Athena scans 7.6× the bytes BigQuery does** for identical answers — storage
+  format, not workload. Snowflake is not on that axis at all: it bills warehouse
+  uptime, so a 5.7-second build costs about 66 seconds of it.
 
 ### dbt lineage
 
@@ -113,8 +141,25 @@ analytics-ready outputs:
   work experience, per (occupation, state).
 - `fct_skills_demand` — Q3 unnested skill mentions by state.
 
-A custom singular test enforces ≥ 90% LLM-extraction coverage; 51
-data tests pass end-to-end.
+A custom singular test enforces ≥ 90% LLM-extraction coverage. `dbt build`
+passes 63 nodes on BigQuery and 14 on Snowflake, which is a smaller number
+because the Snowflake tree is a deliberate slice rather than a copy — see below.
+
+### The Snowflake models
+
+`dbt/models/snowflake/` holds three models, run with `--target dev_sf`:
+`stg_sf__adzuna_jobs` and `stg_sf__llm_extract` shred the `VARIANT` payload into
+columns at read time, and `fct_sf__skills_demand` reaches into an array no schema
+declares, with `LATERAL FLATTEN`.
+
+They are not ports. The BigQuery models read tables whose columns the warehouse
+already knows; these do the shredding themselves. The two trees are kept apart
+by `+enabled` in `dbt_project.yml`, one line per path, so `dbt build` against
+either target sees only the models written for it — selection, not portability.
+
+The slice stops at one mart on purpose: `dim_occupation` and the two
+supply-demand facts depend on four ANZSCO seed files, and carrying those across
+would demonstrate nothing Snowflake-specific.
 
 ---
 
@@ -126,7 +171,9 @@ data tests pass end-to-end.
 | Landing zones | Google Cloud Storage + Amazon S3 — byte-identical mirrors, gzipped JSONL, Hive-partitioned by snapshot date |
 | Warehouse | Google BigQuery (raw / staging / marts) |
 | Lakehouse | AWS Glue Data Catalog + Amazon Athena (Trino) — query-in-place, partition projection, no crawler |
-| Transformation | dbt Core 1.11 · dbt-bigquery · dbt-utils |
+| Second warehouse | Snowflake on AWS ap-southeast-2 — storage integration + external stage over the same S3 prefix, `VARIANT` landing layer, resource monitor that suspends rather than emails |
+| Transformation | dbt Core 1.11 · dbt-bigquery · dbt-snowflake · dbt-utils — two independent model trees, selected per target by `+enabled` |
+| Cross-engine verification | `compare_engines.py` — six checks, three dialects, degrades cleanly when an engine is unreachable |
 | LLM extraction | Qwen-Turbo via Alibaba DashScope (OpenAI-compatible endpoint) |
 | LLM-as-judge eval | Qwen-Plus, with per-field accuracy scoring |
 | BI | Power BI Desktop (theme imported via JSON) |

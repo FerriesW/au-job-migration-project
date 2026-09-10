@@ -1,0 +1,41 @@
++-----------------------------------------------+
+| Cross-engine equivalence                      |
+| checks=6  engines=bigquery, athena, snowflake |
++-----------------------------------------------+
+
+
+                              Equivalence checks                               
++-----------------------------------------------------------------------------+
+| Check                    | Rows | Agree | BigQuery scanned | Athena scanned |
+|--------------------------+------+-------+------------------+----------------|
+| raw row and distinct-id  |    1 | yes   |           94,080 |      1,497,121 |
+| counts                   |      |       |                  |                |
+| city histogram from the  |    4 | yes   |          312,070 |      1,497,121 |
+| nested location array    |      |       |                  |                |
+| LLM extract row and      |    1 | yes   |           79,500 |         59,035 |
+| distinct-job counts      |      |       |                  |                |
+| top skills, unnesting    |   10 | yes   |           49,773 |         59,035 |
+| the extracted array      |      |       |                  |                |
+| skills-demand mart,      |  117 | yes   |            3,813 |      1,556,156 |
+| reached three different  |      |       |                  |                |
+| ways                     |      |       |                  |                |
+| sponsorship signal       |    3 | yes   |           83,477 |         59,035 |
+| breakdown                |      |       |                  |                |
++-----------------------------------------------------------------------------+
+
+
+                         Scan cost reported per engine                         
++-----------------------------------------------------------------------------+
+| Engine    | Queries |         Total scanned | Billing model                 |
+|-----------+---------+-----------------------+-------------------------------|
+| bigquery  |       6 |             622,713 B | per byte scanned, 1 TiB/month |
+|           |         |                       | free                          |
+| athena    |       6 |           4,727,503 B | per byte scanned, $5/TB, 10   |
+|           |         |                       | MB minimum per query          |
+| snowflake |       0 | not exposed per query | per credit-second of          |
+|           |         |                       | warehouse uptime, not per     |
+|           |         |                       | byte                          |
++-----------------------------------------------------------------------------+
++----------------------------------------------+
+| All 6 checks agree across the three engines. |
++----------------------------------------------+

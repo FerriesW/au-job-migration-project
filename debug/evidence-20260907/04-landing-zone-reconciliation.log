@@ -1,0 +1,24 @@
++-----------------------------------------------------------------------------+
+| Landing-zone reconciliation                                                 |
+| source=gs://au-jobs-radar-raw/  target=s3://au-jobs-radar-raw/              |
+| region=ap-southeast-2  dry_run=True                                         |
++-----------------------------------------------------------------------------+
+
+
+                     GCS -> S3 landing-zone reconciliation                     
++-----------------------------------------------------------------------------+
+| Object key                 |    Size | Status  | Verified MD5               |
+|----------------------------+---------+---------+----------------------------|
+| adzuna/snapshot_date=2026- | 259,108 | in sync | 4b1e27ca5ac159b555b6280344 |
+| 05-07/brisbane.jsonl.gz    |         |         | 5a1a2f                     |
+| adzuna/snapshot_date=2026- | 340,118 | in sync | 721af0d4b6ee7505fbd813a6d4 |
+| 05-07/melbourne.jsonl.gz   |         |         | c58f4f                     |
+| adzuna/snapshot_date=2026- | 897,895 | in sync | 9f6be4eef9f3a5ef0917a46a53 |
+| 05-07/sydney.jsonl.gz      |         |         | b8f4f5                     |
+| adzuna_llm_extract/snapsho |  59,035 | in sync | 3aa77cf94629079a10a0ed4429 |
+| t_date=2026-05-07/extract. |         |         | 034ea8                     |
+| jsonl.gz                   |         |         |                            |
++-----------------------------------------------------------------------------+
++-------------------------------------------+
+| Dry run ¡ª 0 of 4 objects would be copied. |
++-------------------------------------------+

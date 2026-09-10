@@ -7,6 +7,85 @@ Versioning follows Semantic Versioning (https://semver.org).
 ==============================================================================
 
 
+[2026-09-07]  v0.12.0 — Snowflake dbt models, mart-level equivalence, and
+                        graceful degradation when an engine disappears
+------------------------------------------------------------------------------
+
+Scope of work
+  - Three dbt models over the Snowflake VARIANT landing layer, run with
+    --target dev_sf. stg_sf__adzuna_jobs and stg_sf__llm_extract shred the
+    payload into columns at read time; fct_sf__skills_demand reaches into an
+    array no schema declares, with LATERAL FLATTEN. They are written against
+    VARIANT, not ported from the BigQuery models, which read tables whose
+    columns the warehouse already knows.
+  - The BigQuery and Snowflake model trees are kept apart by +enabled in
+    dbt_project.yml, one line per path. ADR-0002 was amended to draw the line
+    it meant to draw: the prohibition on target.type is about portability —
+    making one model produce the right SQL for whichever warehouse it lands on
+    — and does not extend to selecting which models exist on which warehouse.
+  - A sixth equivalence check compares the skills-demand marts. It is the
+    strongest one because the three sides share no lineage: BigQuery builds
+    through int_jobs_enriched and int_jobs_anzsco_mapped including an ANZSCO
+    join, Snowflake joins its two staging views directly, and Athena
+    recomputes the whole thing inline from the two Glue tables.
+  - compare_engines.py now separates "an engine is unreachable" from "the
+    engines disagree". Unreachable engines are probed once up front, named in
+    the output and excluded; the exit code stays zero as long as the engines
+    that answered agree. Fewer than two reachable engines exits 2 rather than
+    passing quietly, and --require-all restores strict behaviour for a release.
+  - Evidence captured under debug/evidence-20260907/ while all three
+    warehouses were live, with an HTML summary that embeds the logs verbatim.
+    The Snowflake trial expires 2026-09-17 and the account facts in it are not
+    recoverable afterwards.
+
+Verifications passed
+  - dbt build --target dev_sf: 14/14, 5.7 seconds, no deprecation warnings.
+  - dbt build --target dev: 63/63. The +enabled change touches shared
+    configuration, so the BigQuery path was rebuilt end to end rather than
+    only parsed.
+  - compare_engines.py: all six checks agree across three engines. The two
+    marts return the same 117 rows despite unrelated lineages.
+  - Degradation exercised rather than assumed, by pointing SNOWFLAKE_ACCOUNT
+    at a non-existent account: three engines reachable exits 0; Snowflake
+    unreachable still exits 0 after comparing the other two and naming the
+    one it skipped; one engine reachable exits 2; --require-all exits 1.
+
+Defects resolved
+  - The published cost comparison was measuring BigQuery's result cache. A
+    repeated identical query is served from cache and reports zero bytes, so
+    the figures depended on how recently the same question had been asked.
+    BigQueryEngine now sets use_query_cache=False. Corrected over six checks:
+    BigQuery 622,713 bytes, Athena 4,727,503 — 7.6x for identical answers,
+    which is storage format rather than workload. Snowflake is not on that
+    axis: a 5.7-second build bills roughly 66 seconds of warehouse uptime
+    because AUTO_SUSPEND is 60.
+  - An accepted_values test caught remote_friendly declared as
+    yes/no/hybrid/unspecified when the real vocabulary is
+    remote/hybrid/onsite/unspecified. It describes where the work happens,
+    not whether remote is permitted.
+  - README documented the AWS path but never mentioned Snowflake — the word
+    did not appear once. The architecture diagram, the tech stack and the dbt
+    section now cover all three engines, and the stale "51 data tests" claim
+    is replaced with the current 63 and 14.
+
+Changes
+  Added
+    - dbt/models/snowflake/{sources.yml, schema.yml}
+    - dbt/models/snowflake/staging/{stg_sf__adzuna_jobs.sql,
+      stg_sf__llm_extract.sql}
+    - dbt/models/snowflake/marts/fct_sf__skills_demand.sql
+    - debug/snowflake-evidence-20260907.html and evidence-20260907/*.log
+  Changed
+    - dbt/dbt_project.yml: +enabled per path for models and seeds.
+    - docs/adr/0002-multi-cloud-architecture.md: portability versus selection.
+    - adzuna_pipeline/equivalence.py: sixth check over the marts.
+    - adzuna_pipeline/engines.py: BigQuery result cache disabled.
+    - scripts/compare_engines.py: probe, degrade, floor at two engines.
+    - snowflake/README.md, README.md.
+
+==============================================================================
+
+
 [2026-08-24]  v0.11.0 — Multi-cloud: S3 landing zone, Athena, Snowflake, and
                         an executable equivalence claim
 ------------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+
+=== account ===
+  XU06234 | AWS_AP_SOUTHEAST_2 | 10.31.103 | COMPUTE_WH | DBT_ROLE
+
+=== credits used per day ===
+
+=== objects in RAW / STAGING / MARTS ===
+  MARTS | FCT_SF__SKILLS_DEMAND | 117
+  RAW | ADZUNA_JOBS | 4704
+  RAW | ADZUNA_LLM_EXTRACT | 3975
+  STAGING | STG_SF__ADZUNA_JOBS | 
+  STAGING | STG_SF__LLM_EXTRACT | 
+
+=== stages ===
+  2026-08-17T23:11:10.105000-07:00 | S3_ADZUNA | AU_JOBS_RADAR | RAW | s3://au-jobs-radar-raw/adzuna/ | N | N | DBT_ROLE |  | ap-southeast-2 | EXTERNAL | AWS |  | AU_JOBS_RADAR_S3 |  | ROLE | N
+  2026-08-23T22:21:54.862000-07:00 | S3_LLM_EXTRACT | AU_JOBS_RADAR | RAW | s3://au-jobs-radar-raw/adzuna_llm_extract/ | N | N | DBT_ROLE |  | ap-southeast-2 | EXTERNAL | AWS |  | AU_JOBS_RADAR_S3 |  | ROLE | N

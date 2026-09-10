@@ -1,0 +1,26 @@
++-----------------------------------------------------------------------------+
+| Glue catalog DDL                                                            |
+| source=D:\Claude Project\au-job-migration-project\aws\glue  files=3         |
+| dry_run=False                                                               |
++-----------------------------------------------------------------------------+
+
+
+              Athena DDL application              
++------------------------------------------------+
+| Statement                 | State     | Detail |
+|---------------------------+-----------+--------|
+| 01_database.sql           | SUCCEEDED | 242 ms |
+| 02_adzuna_jobs.sql        | SUCCEEDED | 265 ms |
+| 03_adzuna_llm_extract.sql | SUCCEEDED | 297 ms |
++------------------------------------------------+
+
+Verification ¡ª rows per table and snapshot date
++-------------------------------------------+
+| table              | snapshot_date | rows |
+|--------------------+---------------+------|
+| adzuna_jobs        | 2026-05-07    | 4704 |
+| adzuna_llm_extract | 2026-05-07    | 3975 |
++-------------------------------------------+
++---------------------------------------------+
+| Applied 3 statement(s) to the Glue catalog. |
++---------------------------------------------+

@@ -1,0 +1,43 @@
+[0m05:25:50  Running with dbt=1.11.8
+[0m05:25:50  Registered adapter: snowflake=1.11.5
+[0m05:25:51  Unable to do partial parsing because config vars, config profile, or config target have changed
+[0m05:25:51  Unable to do partial parsing because profile has changed
+[0m05:25:51  Unable to do partial parsing because a project dependency has been added
+[0m05:25:53  Found 3 models, 11 data tests, 4 sources, 643 macros
+[0m05:25:53  
+[0m05:25:53  Concurrency: 4 threads (target='dev_sf')
+[0m05:25:53  
+[0m05:25:56  1 of 14 START sql view model staging.stg_sf__adzuna_jobs ....................... [RUN]
+[0m05:25:56  2 of 14 START sql view model staging.stg_sf__llm_extract ....................... [RUN]
+[0m05:25:57  2 of 14 OK created sql view model staging.stg_sf__llm_extract .................. [[32mSUCCESS 1[0m in 0.80s]
+[0m05:25:57  3 of 14 START test accepted_values_stg_sf__llm_extract_remote_friendly__remote__hybrid__onsite__unspecified  [RUN]
+[0m05:25:57  5 of 14 START test not_null_stg_sf__llm_extract_job_id ......................... [RUN]
+[0m05:25:57  4 of 14 START test accepted_values_stg_sf__llm_extract_sponsorship_signal__explicit_yes__explicit_no__unspecified  [RUN]
+[0m05:25:57  1 of 14 OK created sql view model staging.stg_sf__adzuna_jobs .................. [[32mSUCCESS 1[0m in 0.92s]
+[0m05:25:57  6 of 14 START test not_null_stg_sf__llm_extract_remote_friendly ................ [RUN]
+[0m05:25:57  5 of 14 PASS not_null_stg_sf__llm_extract_job_id ............................... [[32mPASS[0m in 0.15s]
+[0m05:25:57  7 of 14 START test not_null_stg_sf__llm_extract_sponsorship_signal ............. [RUN]
+[0m05:25:57  6 of 14 PASS not_null_stg_sf__llm_extract_remote_friendly ...................... [[32mPASS[0m in 0.11s]
+[0m05:25:57  8 of 14 START test accepted_values_stg_sf__adzuna_jobs_country__Australia ...... [RUN]
+[0m05:25:57  7 of 14 PASS not_null_stg_sf__llm_extract_sponsorship_signal ................... [[32mPASS[0m in 0.09s]
+[0m05:25:57  9 of 14 START test not_null_stg_sf__adzuna_jobs_job_id ......................... [RUN]
+[0m05:25:57  8 of 14 PASS accepted_values_stg_sf__adzuna_jobs_country__Australia ............ [[32mPASS[0m in 0.12s]
+[0m05:25:57  10 of 14 START test not_null_stg_sf__adzuna_jobs_snapshot_date ................. [RUN]
+[0m05:25:57  3 of 14 PASS accepted_values_stg_sf__llm_extract_remote_friendly__remote__hybrid__onsite__unspecified  [[32mPASS[0m in 0.37s]
+[0m05:25:57  4 of 14 PASS accepted_values_stg_sf__llm_extract_sponsorship_signal__explicit_yes__explicit_no__unspecified  [[32mPASS[0m in 0.43s]
+[0m05:25:57  10 of 14 PASS not_null_stg_sf__adzuna_jobs_snapshot_date ....................... [[32mPASS[0m in 0.10s]
+[0m05:25:57  9 of 14 PASS not_null_stg_sf__adzuna_jobs_job_id ............................... [[32mPASS[0m in 0.21s]
+[0m05:25:57  11 of 14 START sql table model marts.fct_sf__skills_demand ..................... [RUN]
+[0m05:25:59  11 of 14 OK created sql table model marts.fct_sf__skills_demand ................ [[32mSUCCESS 1[0m in 1.40s]
+[0m05:25:59  12 of 14 START test dbt_utils_accepted_range_fct_sf__skills_demand_mention_count__True__3  [RUN]
+[0m05:25:59  14 of 14 START test not_null_fct_sf__skills_demand_state ....................... [RUN]
+[0m05:25:59  13 of 14 START test not_null_fct_sf__skills_demand_skill ....................... [RUN]
+[0m05:25:59  14 of 14 PASS not_null_fct_sf__skills_demand_state ............................. [[32mPASS[0m in 0.11s]
+[0m05:25:59  12 of 14 PASS dbt_utils_accepted_range_fct_sf__skills_demand_mention_count__True__3  [[32mPASS[0m in 0.12s]
+[0m05:25:59  13 of 14 PASS not_null_fct_sf__skills_demand_skill ............................. [[32mPASS[0m in 0.20s]
+[0m05:25:59  
+[0m05:25:59  Finished running 1 table model, 11 data tests, 2 view models in 0 hours 0 minutes and 6.01 seconds (6.01s).
+[0m05:25:59  
+[0m05:25:59  [32mCompleted successfully[0m
+[0m05:25:59  
+[0m05:25:59  Done. PASS=14 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=14
